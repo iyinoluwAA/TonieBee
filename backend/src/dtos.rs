@@ -100,7 +100,11 @@ pub struct UserListResponseDto {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserLoginResponseDto {
     pub status: String,
-    pub token: String,
+    pub token: String, // access JWT
+    #[serde(rename = "refreshTokenId")]
+    pub refresh_token_id: Option<String>,
+    #[serde(rename = "refreshToken")]
+    pub refresh_token: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -3,6 +3,32 @@
 version = 4
 
 [[package]]
+name = "TB-backend"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "dotenv",
+ "hex",
+ "jsonwebtoken",
+ "lettre",
+ "rand",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "time",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing-subscriber",
+ "uuid",
+ "validator",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -322,30 +348,6 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
-]
-
-[[package]]
-name = "axum_full_backend"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "async-trait",
- "axum",
- "axum-extra",
- "chrono",
- "dotenv",
- "jsonwebtoken",
- "lettre",
- "serde",
- "serde_json",
- "sqlx",
- "time",
- "tokio",
- "tower",
- "tower-http",
- "tracing-subscriber",
- "uuid",
- "validator",
 ]
 
 [[package]]

@@ -14,7 +14,89 @@ impl DBClient {
     pub fn new(pool: Pool<Postgres>) -> Self {
         DBClient { pool }
     }
+
+
+    /// Create a new refresh token
+    pub async fn create_refresh_token(
+        &self,
+        user_id: Uuid,
+        token_id: Uuid,
+        token_hash: &str,
+        expires_at: DateTime<Utc>,
+    ) -> Result<(), sqlx::Error> {
+        let _ = sqlx::query!(
+            r#"
+            INSERT INTO refresh_tokens (user_id, token_id, token_hash, expires_at)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            user_id,
+            token_id,
+            token_hash,
+            expires_at
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Find refresh token by token_id
+    /// Returns tuple: (user_id, token_hash, revoked, expires_at)
+    pub async fn find_refresh_token_by_id(
+        &self,
+        token_id: Uuid,
+    ) -> Result<Option<(Uuid, String, bool, Option<DateTime<Utc>>)>, sqlx::Error> {
+        let row = sqlx::query!(
+            r#"
+            SELECT user_id, token_hash, revoked, expires_at
+            FROM refresh_tokens
+            WHERE token_id = $1
+            "#,
+            token_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| (r.user_id, r.token_hash, r.revoked, r.expires_at)))
+    }
+
+    /// Revoke a specific refresh token by token_id
+    pub async fn revoke_refresh_token_by_id(
+        &self,
+        token_id: Uuid,
+    ) -> Result<(), sqlx::Error> {
+        let _ = sqlx::query!(
+            r#"
+            UPDATE refresh_tokens
+            SET revoked = true
+            WHERE token_id = $1
+            "#,
+            token_id
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Revoke all refresh tokens for a user (useful on suspicious activity / logout-all)
+    pub async fn revoke_all_refresh_tokens_for_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<(), sqlx::Error> {
+        let _ = sqlx::query!(
+            r#"
+            UPDATE refresh_tokens
+            SET revoked = true
+            WHERE user_id = $1
+            "#,
+            user_id
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
+
+
 
 #[async_trait]
 pub trait UserExt {

@@ -10,7 +10,7 @@ mod handler;
 mod routes;
 
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use axum::http::{header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE}, HeaderValue, Method};
 use config::Config;
@@ -26,6 +26,7 @@ use tracing_subscriber::filter::LevelFilter;
 pub struct AppState {
     pub env: Config,
     pub db_client: DBClient,
+    pub start_time: Instant,
 }
 
 #[tokio::main ]
@@ -63,6 +64,7 @@ async fn main (){
     let app_state = AppState {
             env: config.clone(),
             db_client,
+            start_time: Instant::now(),
         };
 
     let app = create_router(Arc::new(app_state.clone())).layer(cors.clone());
