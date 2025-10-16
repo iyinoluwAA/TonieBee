@@ -1,4 +1,4 @@
-use axum::http::{header, StatusCode};
+use axum::http::StatusCode;
 use axum::{response::IntoResponse, Extension, Json};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use chrono::Utc;
@@ -8,9 +8,11 @@ use std::sync::Arc;
 use time;
 use uuid::Uuid;
 
-
 use crate::{
-    error::HttpError, utils::refresh as refresh_utils, utils::{token as jwt_utils, token::{cookie_secure}}, AppState,
+    error::HttpError,
+    utils::refresh as refresh_utils,
+    utils::{token as jwt_utils, token::{cookie_secure}},
+    AppState,
 };
 
 #[derive(Deserialize)]
@@ -154,27 +156,17 @@ pub async fn refresh_handler(
         .secure(cookie_secure())
         .build();
 
-    // prepare response, attach cookies
+    // Add cookies to the CookieJar and return it with the JSON response
+    let jar = jar
+        .add(access_cookie)
+        .add(refresh_cookie)
+        .add(refresh_id_cookie);
+
     let body = RefreshResponse {
         access_token: access_token.clone(),
     };
-    let mut response = (StatusCode::OK, Json(body)).into_response();
 
-    // attach cookies using header::SET_COOKIE
-    response.headers_mut().append(
-        header::SET_COOKIE,
-        access_cookie.to_string().parse().unwrap(),
-    );
-    response.headers_mut().append(
-        header::SET_COOKIE,
-        refresh_cookie.to_string().parse().unwrap(),
-    );
-    response.headers_mut().append(
-        header::SET_COOKIE,
-        refresh_id_cookie.to_string().parse().unwrap(),
-    );
-
-    Ok(response)
+    Ok((jar, Json(body)))
 }
 
 #[derive(Deserialize)]
@@ -225,27 +217,14 @@ pub async fn logout_handler(
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .same_site(SameSite::Lax)   
+        .same_site(SameSite::Lax)
         .secure(cookie_secure())
         .build();
 
-    let mut response = (
-        StatusCode::OK,
-        Json(json!({"status":"success","message":"logged out"})),
-    )
-        .into_response();
-    response.headers_mut().append(
-        header::SET_COOKIE,
-        clear_cookie.to_string().parse().unwrap(),
-    );
-    response.headers_mut().append(
-        header::SET_COOKIE,
-        clear_refresh.to_string().parse().unwrap(),
-    );
-    response.headers_mut().append(
-        header::SET_COOKIE,
-        clear_refresh_id.to_string().parse().unwrap(),
-    );
+    // Add clear cookies to the jar and return
+    let jar = jar.add(clear_cookie).add(clear_refresh).add(clear_refresh_id);
 
-    Ok(response)
+    let body = Json(json!({"status":"success","message":"logged out"}));
+
+    Ok((jar, body))
 }

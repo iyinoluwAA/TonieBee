@@ -209,6 +209,7 @@ pub async fn login(
     Ok((jar, Json(response_body)))
 }
 
+
 // Convenience local logout (you also have an auth_refresh module)
 pub async fn logout_local(
     jar: CookieJar,
