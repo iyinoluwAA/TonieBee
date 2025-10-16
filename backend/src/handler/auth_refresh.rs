@@ -1,4 +1,4 @@
-use axum::http::StatusCode;
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::{response::IntoResponse, Extension, Json};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use chrono::Utc;
@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     error::HttpError,
+    middle_ware::csrf::verify_csrf,
     utils::refresh as refresh_utils,
     utils::{token as jwt_utils, token::{cookie_secure}},
     AppState,
@@ -176,9 +177,18 @@ pub struct LogoutRequest {
 
 pub async fn logout_handler(
     jar: CookieJar,
+    headers: HeaderMap,
     Extension(state): Extension<Arc<AppState>>,
     maybe_json: Option<Json<LogoutRequest>>,
 ) -> Result<impl IntoResponse, HttpError> {
+    // If request is cookie-based (client sent refresh_id cookie), require CSRF double-submit:
+    // If cookies are present, verify X-CSRF-Token header matches csrf_token cookie.
+    if jar.get("refresh_id").is_some() {
+        if !verify_csrf(&headers, &jar) {
+            return Err(HttpError::unauthorized("invalid csrf token".to_string()));
+        }
+    }
+
     // revoke from cookie or JSON
     if let Some(refresh_id_cookie) = jar.get("refresh_id") {
         if let Ok(token_uuid) = Uuid::parse_str(refresh_id_cookie.value()) {

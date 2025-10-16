@@ -54,7 +54,5 @@ pub fn decode_token<T: Into<String>>(token: T, secret: &[u8]) -> Result<String, 
 }
 
 pub fn cookie_secure() -> bool {
-        std::env::var("RUST_ENV")
-            .map(|v| v.to_lowercase() == "production")
-            .unwrap_or(false)
+    std::env::var("RUST_ENV").unwrap_or_else(|_| "development".into()) == "production"
 }
