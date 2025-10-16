@@ -101,8 +101,8 @@ pub async fn register(
         Err(e) => Err(HttpError::server_error(e.to_string())),
     }
 }
-
 pub async fn login(
+    jar: CookieJar,
     Extension(app_state): Extension<Arc<AppState>>,
     Json(body): Json<LoginUserDto>,
 ) -> Result<impl IntoResponse, HttpError> {
@@ -128,7 +128,6 @@ pub async fn login(
         ));
     }
 
-
     // create access token (JWT)
     let access_token = token::create_token(
         &user.id.to_string(),
@@ -148,19 +147,18 @@ pub async fn login(
     let user_id_uuid = Uuid::parse_str(&user.id.to_string())
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    // persist refresh token in DB (ensure this method exists in your DB client)
+    // persist refresh token in DB
     app_state
         .db_client
         .create_refresh_token(user_id_uuid, refresh_id, &refresh_hash, refresh_expires_at)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    
-    // Build cookies correctly: use Cookie::build(...).build()
+    // Build cookies
     let access_cookie_duration = time::Duration::minutes(app_state.env.jwt_maxage * 60);
     let access_cookie = Cookie::build(("token", access_token.clone()))
         .http_only(true)
-        .secure(cookie_secure()) // .secure(true) // enable in production with HTTPS
+        .secure(cookie_secure())
         .same_site(SameSite::Lax)
         .max_age(access_cookie_duration)
         .path("/")
@@ -172,7 +170,7 @@ pub async fn login(
         .max_age(refresh_cookie_duration)
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(cookie_secure()) // enable in production with HTTPS
+        .secure(cookie_secure())
         .build();
 
     let refresh_id_cookie = Cookie::build(("refresh_id", refresh_id.to_string()))
@@ -180,46 +178,35 @@ pub async fn login(
         .max_age(refresh_cookie_duration)
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(cookie_secure()) // .secure(true) // enable in production with HTTPS
+        .secure(cookie_secure())
         .build();
 
     let csrf = uuid::Uuid::new_v4().to_string();
     let csrf_cookie = Cookie::build(("csrf_token", csrf.clone()))
         .path("/")
         .max_age(time::Duration::days(1))
-        .http_only(false)   // JS must read this cookie for double-submit CSRF
+        .http_only(false) // JS must read this cookie for double-submit CSRF
         .same_site(SameSite::Lax)
         .secure(cookie_secure())
         .build();
 
-    // Response JSON (we keep access token in JSON for convenience; refresh is in cookies)
-    let response = axum::response::Json(UserLoginResponseDto {
+    // Add cookies to the CookieJar (this is the key step)
+    let jar = jar
+        .add(access_cookie)
+        .add(refresh_cookie)
+        .add(refresh_id_cookie)
+        .add(csrf_cookie);
+
+    // Response JSON (we keep access token also in JSON for convenience)
+    let response_body = UserLoginResponseDto {
         status: "success".to_string(),
         token: access_token.clone(),
         refresh_token_id: None,
         refresh_token: None,
-    });
+    };
 
-    // attach cookies via headers
-    let mut headers = HeaderMap::new();
-    headers.append(
-        header::SET_COOKIE,
-        access_cookie.to_string().parse().unwrap(),
-    );
-    headers.append(
-        header::SET_COOKIE,
-        refresh_cookie.to_string().parse().unwrap(),
-    );
-    headers.append(
-        header::SET_COOKIE,
-        refresh_id_cookie.to_string().parse().unwrap(),
-    );
-
-    let mut response = response.into_response();
-    response.headers_mut().extend(headers);
-
-    response.headers_mut().append(header::SET_COOKIE, csrf_cookie.to_string().parse().unwrap());
-    Ok(response)
+    // Return the jar together with the JSON body so Axum will set Set-Cookie headers
+    Ok((jar, Json(response_body)))
 }
 
 // Convenience local logout (you also have an auth_refresh module)
