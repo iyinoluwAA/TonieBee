@@ -2,11 +2,11 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+use chrono::{Duration, Utc};
+use hex;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use hex;
 use uuid::Uuid;
-use chrono::{Utc, Duration};
 
 /// Generate a cryptographically-random refresh token (plain text to give client)
 pub fn generate_refresh_token_plain() -> String {
@@ -31,7 +31,9 @@ pub fn hash_token(token: &str) -> Result<String, argon2::password_hash::Error> {
 /// Verify a stored Argon2 hash against a presented token
 pub fn verify_hash(stored_hash: &str, token: &str) -> bool {
     match PasswordHash::new(stored_hash) {
-        Ok(parsed) => Argon2::default().verify_password(token.as_bytes(), &parsed).is_ok(),
+        Ok(parsed) => Argon2::default()
+            .verify_password(token.as_bytes(), &parsed)
+            .is_ok(),
         Err(_) => false,
     }
 }

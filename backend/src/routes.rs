@@ -4,7 +4,7 @@ use axum::{middleware, Extension, Router};
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    handler::{auth::auth_handler, users::users_handler, health, metrics, ping},
+    handler::{auth::auth_handler, health, metrics, ping, users::users_handler},
     middleware::auth,
     AppState,
 };
@@ -18,11 +18,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router {
         .route("/health", axum::routing::get(health::health_check)) // ✅ Health check endpoint
         .route("/uptime", axum::routing::get(metrics::uptime))
         .nest("/auth", auth_handler())
-        .nest(
-            "/users",
-            users_handler()
-                .layer(middleware::from_fn(auth))
-        )
+        .nest("/users", users_handler().layer(middleware::from_fn(auth)))
         .merge(ping_route)
         .layer(TraceLayer::new_for_http())
         .layer(Extension(app_state));

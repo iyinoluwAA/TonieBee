@@ -15,6 +15,7 @@ use time;
 use uuid::Uuid;
 use validator::Validate; // for cookie durations
 
+
 use crate::{
     db::UserExt,
     dtos::{
@@ -23,7 +24,7 @@ use crate::{
     },
     error::{ErrorMessage, HttpError},
     mail::mails::{send_forget_password_email, send_verification_email, send_welcome_email},
-    utils::{password, refresh as refresh_utils, token},
+    utils::{password, refresh as refresh_utils, token::{cookie_secure}, token},
     middle_ware::csrf::verify_csrf,
     AppState,
 };
@@ -155,14 +156,11 @@ pub async fn login(
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
     
-        fn cookie_secure() -> bool {
-        std::env::var("RUST_ENV").unwrap_or_else(|_| "development".into()) == "production"
-    }
     // Build cookies correctly: use Cookie::build(...).build()
     let access_cookie_duration = time::Duration::minutes(app_state.env.jwt_maxage * 60);
     let access_cookie = Cookie::build(("token", access_token.clone()))
         .http_only(true)
-        .secure(crate::utils::token::cookie_secure())// .secure(true) // enable in production with HTTPS
+        .secure(cookie_secure()) // .secure(true) // enable in production with HTTPS
         .same_site(SameSite::Lax)
         .max_age(access_cookie_duration)
         .path("/")
@@ -174,7 +172,7 @@ pub async fn login(
         .max_age(refresh_cookie_duration)
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(crate::utils::token::cookie_secure()) // .secure(true) // enable in production with HTTPS
+        .secure(cookie_secure()) // enable in production with HTTPS
         .build();
 
     let refresh_id_cookie = Cookie::build(("refresh_id", refresh_id.to_string()))
@@ -182,7 +180,7 @@ pub async fn login(
         .max_age(refresh_cookie_duration)
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(crate::utils::token::cookie_secure()) // .secure(true) // enable in production with HTTPS   
+        .secure(cookie_secure()) // .secure(true) // enable in production with HTTPS
         .build();
 
     let csrf = uuid::Uuid::new_v4().to_string();
@@ -191,7 +189,7 @@ pub async fn login(
         .max_age(time::Duration::days(1))
         .http_only(false)   // JS must read this cookie for double-submit CSRF
         .same_site(SameSite::Lax)
-        .secure(crate::utils::token::cookie_secure())
+        .secure(cookie_secure())
         .build();
 
     // Response JSON (we keep access token in JSON for convenience; refresh is in cookies)
@@ -249,21 +247,21 @@ pub async fn logout_local(
         .max_age(time::Duration::seconds(0))
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(crate::utils::token::cookie_secure())
+        .secure(cookie_secure())
         .build();
     let clear_refresh = Cookie::build(("refresh_token", ""))
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(crate::utils::token::cookie_secure())
+        .secure(cookie_secure())
         .build();
     let clear_refresh_id = Cookie::build(("refresh_id", ""))
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(crate::utils::token::cookie_secure())
+        .secure(cookie_secure())
         .build();
 
     let mut response = (
