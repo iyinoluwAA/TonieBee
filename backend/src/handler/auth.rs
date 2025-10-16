@@ -9,7 +9,7 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use axum_extra::extract::cookie::{Cookie, CookieJar};
 use chrono::{Duration, Utc};
 use time;
 use uuid::Uuid;
@@ -24,7 +24,7 @@ use crate::{
     },
     error::{ErrorMessage, HttpError},
     mail::mails::{send_forget_password_email, send_verification_email, send_welcome_email},
-    utils::{password, refresh as refresh_utils, token::{cookie_secure}, token},
+    utils::{password, refresh as refresh_utils, token::{cookie_secure}, token, token::{cookie_same_site}},
     middle_ware::csrf::verify_csrf,
     AppState,
 };
@@ -159,7 +159,7 @@ pub async fn login(
     let access_cookie = Cookie::build(("token", access_token.clone()))
         .http_only(true)
         .secure(cookie_secure())
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .max_age(access_cookie_duration)
         .path("/")
         .build();
@@ -169,7 +169,7 @@ pub async fn login(
         .path("/")
         .max_age(refresh_cookie_duration)
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
 
@@ -177,7 +177,7 @@ pub async fn login(
         .path("/")
         .max_age(refresh_cookie_duration)
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
 
@@ -186,7 +186,7 @@ pub async fn login(
         .path("/")
         .max_age(time::Duration::days(1))
         .http_only(false) // JS must read this cookie for double-submit CSRF
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
 
@@ -234,21 +234,21 @@ pub async fn logout_local(
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
     let clear_refresh = Cookie::build(("refresh_token", ""))
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
     let clear_refresh_id = Cookie::build(("refresh_id", ""))
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
 
@@ -328,6 +328,7 @@ pub async fn verify_email(
         .path("/")
         .max_age(cookie_duration)
         .http_only(true)
+
         .build();
 
     let mut headers = HeaderMap::new();

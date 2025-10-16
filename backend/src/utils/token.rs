@@ -1,4 +1,5 @@
 use axum::http::StatusCode;
+use axum_extra::extract::cookie::SameSite;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -55,4 +56,12 @@ pub fn decode_token<T: Into<String>>(token: T, secret: &[u8]) -> Result<String, 
 
 pub fn cookie_secure() -> bool {
     std::env::var("RUST_ENV").unwrap_or_else(|_| "development".into()) == "production"
+}
+
+pub fn cookie_same_site() -> SameSite {
+    if std::env::var("RUST_ENV").unwrap_or_else(|_| "development".into()) == "production" {
+        SameSite::Strict
+    } else {
+        SameSite::Lax
+    }
 }

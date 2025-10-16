@@ -1,6 +1,6 @@
-use axum::http::{header, HeaderMap, StatusCode};
+use axum::http::{ HeaderMap};
 use axum::{response::IntoResponse, Extension, Json};
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use axum_extra::extract::cookie::{Cookie, CookieJar};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -12,7 +12,7 @@ use crate::{
     error::HttpError,
     middle_ware::csrf::verify_csrf,
     utils::refresh as refresh_utils,
-    utils::{token as jwt_utils, token::{cookie_secure}},
+    utils::{token as jwt_utils, token::{cookie_secure}, token::{cookie_same_site}},
     AppState,
 };
 
@@ -136,7 +136,7 @@ pub async fn refresh_handler(
         .path("/")
         .max_age(access_cookie_duration)
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
 
@@ -145,7 +145,7 @@ pub async fn refresh_handler(
         .path("/")
         .max_age(refresh_cookie_duration)
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
 
@@ -153,7 +153,7 @@ pub async fn refresh_handler(
         .path("/")
         .max_age(refresh_cookie_duration)
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
 
@@ -213,21 +213,21 @@ pub async fn logout_handler(
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
     let clear_refresh = Cookie::build(("refresh_token", ""))
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
     let clear_refresh_id = Cookie::build(("refresh_id", ""))
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(cookie_same_site())
         .secure(cookie_secure())
         .build();
 
