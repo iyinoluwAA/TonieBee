@@ -328,7 +328,8 @@ pub async fn verify_email(
         .path("/")
         .max_age(cookie_duration)
         .http_only(true)
-
+        .secure(cookie_secure())
+        .same_site(cookie_same_site())
         .build();
 
     let mut headers = HeaderMap::new();
