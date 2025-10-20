@@ -14,7 +14,7 @@ use chrono::{Duration, Utc};
 use time;
 use uuid::Uuid;
 use validator::Validate; // for cookie durations
-
+use serde::Deserialize;
 
 use crate::{
     db::UserExt,
@@ -37,6 +37,7 @@ pub fn auth_handler() -> Router {
             "/refresh",
             post(crate::handler::auth_refresh::refresh_handler),
         )
+        .route("/resend-verification", post(resend_verification))
         .route(
             "/logout",
             post(crate::handler::auth_refresh::logout_handler),
@@ -54,6 +55,11 @@ pub async fn register(
         .map_err(|e| HttpError::bad_request(e.to_string()))?;
 
     let verification_token = Uuid::new_v4().to_string();
+    // ... after savexport SMTP_PORT="1025"ing the user and firing email:
+    if std::env::var("RUST_ENV").unwrap_or_default() != "production" {
+        println!("VERIFY LINK: http://localhost:8000/api/auth/verify?token={}", verification_token);
+    }
+
     let expires_at = Utc::now() + Duration::hours(24);
 
     let hash_password =
@@ -73,24 +79,27 @@ pub async fn register(
     match result {
         Ok(_user) => {
             let send_email_result =
-                send_verification_email(&body.email, &body.name, &verification_token).await;
-
+            send_verification_email(&body.email, &body.name, &verification_token).await;
+            
             if let Err(e) = send_email_result {
                 eprintln!("Failed to send verification email: {}", e);
             }
-
+            
             Ok((
                 StatusCode::CREATED,
                 Json(Response {
                     status: "success",
                     message:
-                        "Registration successful Please check your email to verify your account."
-                            .to_string(),
+                    "Registration successful Please check your email to verify your account."
+                    .to_string(),
                 }),
+                
+                
             ))
         }
         Err(sqlx::Error::Database(db_err)) => {
             if db_err.is_unique_violation() {
+                // Print the verify link in dev logs to speed testing
                 Err(HttpError::unique_constraint_violation(
                     ErrorMessage::EmailExist.to_string(),
                 ))
@@ -126,6 +135,12 @@ pub async fn login(
         return Err(HttpError::bad_request(
             ErrorMessage::WrongCredentials.to_string(),
         ));
+    }
+
+
+        if !user.verified {
+        // return 401 Unauthorized (frontend can show instructions / resend)
+        return Err(HttpError::unauthorized("email not verified".to_string()));
     }
 
     // create access token (JWT)
@@ -343,6 +358,8 @@ pub async fn verify_email(
     Ok(response)
 }
 
+
+
 pub async fn forgot_password(
     Extension(app_state): Extension<Arc<AppState>>,
     Json(body): Json<ForgotPasswordRequestDto>,
@@ -386,6 +403,69 @@ pub async fn forgot_password(
 
     Ok(Json(response))
 }
+
+#[derive(Deserialize)]
+pub struct EmailOnlyDto {
+pub email: String,
+}
+
+
+
+pub async fn resend_verification(
+Extension(app_state): Extension<Arc<AppState>>,
+Json(body): Json<EmailOnlyDto>,
+) -> Result<impl IntoResponse, HttpError> {
+// validate body
+if body.email.trim().is_empty() {
+return Err(HttpError::bad_request("email is required".to_string()));
+}
+
+
+let result = app_state
+.db_client
+.get_user(None, None, Some(&body.email), None)
+.await
+.map_err(|e| HttpError::server_error(e.to_string()))?;
+
+
+let user = result.ok_or(HttpError::bad_request("Email not found".to_string()))?;
+
+
+if user.verified {
+return Err(HttpError::bad_request("User already verified".to_string()));
+}
+
+
+// create new token and persist
+let verification_token = Uuid::new_v4().to_string();
+let expires_at = Utc::now() + chrono::Duration::hours(24);
+let user_id = Uuid::parse_str(&user.id.to_string())
+.map_err(|e| HttpError::server_error(e.to_string()))?;
+
+
+app_state
+.db_client
+.add_verifed_token(user_id, &verification_token, expires_at)
+.await
+.map_err(|e| HttpError::server_error(e.to_string()))?;
+
+
+// send email (log on error)
+let send_email_result = send_verification_email(&user.email, &user.name, &verification_token).await;
+if let Err(e) = send_email_result {
+eprintln!("Failed to send verification email: {}", e);
+}
+
+
+let response = Response {
+status: "success",
+message: "Verification email resent".to_string(),
+};
+
+
+Ok((StatusCode::OK, Json(response)))
+}
+
 
 pub async fn reset_password(
     Extension(app_state): Extension<Arc<AppState>>,
