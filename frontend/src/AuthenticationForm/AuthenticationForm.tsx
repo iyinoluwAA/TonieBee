@@ -1,4 +1,4 @@
-// frontend/src/AuthenticationForm/AuthenticationForm.tsx
+import React, { useState } from 'react';
 import {
   Anchor,
   Button,
@@ -15,15 +15,24 @@ import {
 import { useForm } from '@mantine/form';
 import { upperFirst, useToggle } from '@mantine/hooks';
 import { GoogleButton } from './GoogleButton';
+import { useNavigate } from 'react-router-dom';
 import { TwitterButton } from './TwitterButton';
-import { useState } from 'react';
+
+type FormValues = {
+  email: string;
+  name: string;
+  password: string;
+  passwordConfirm: string;
+  terms: boolean;
+};
 
 export function AuthenticationForm(props: PaperProps) {
+  const navigate = useNavigate();
   const [type, toggle] = useToggle(['login', 'register']);
-  const [serverMessage, setServerMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const form = useForm({
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [statusColor, setStatusColor] = useState<'green' | 'red' | 'yellow'>('green');
+  const [showResend, setShowResend] = useState(false);
+  const form = useForm<FormValues>({
     initialValues: {
       email: '',
       name: '',
@@ -34,89 +43,109 @@ export function AuthenticationForm(props: PaperProps) {
 
     validate: {
       email: (val) => (/^\S+@\S+$/.test(val) ? null : 'Invalid email'),
-      password: (val) =>
-        val.length <= 6 ? 'Password should include at least 6 characters' : null,
+      password: (val) => (val.length <= 6 ? 'Password should include at least 6 characters' : null),
+      passwordConfirm: (val, values) => (values.password !== val ? 'Passwords do not match' : null),
     },
   });
 
-  async function handleRegister() {
-    setServerMessage(null);
-    form.clearErrors();
+  async function submit(values: FormValues) {
+    setStatusMsg(null);
+    setShowResend(false);
 
-    // client-side checks
-    if (form.values.password !== form.values.passwordConfirm) {
-      form.setFieldError('password', 'Passwords do not match');
-      return;
-    }
-    if (!form.values.terms) {
-      setServerMessage('You must accept the terms and conditions.');
-      return;
-    }
-
-    setLoading(true);
     try {
-      const payload = {
-        name: form.values.name,
-        email: form.values.email,
-        password: form.values.password,
-        passwordconfirm: form.values.passwordConfirm,
-      };
+      if (type === 'register') {
+        const resp = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: values.name,
+            email: values.email,
+            password: values.password,
+            passwordconfirm: values.passwordConfirm, // backend expects this key
+          }),
+          credentials: 'include', // keep if using cookies or cross-origin
+        });
 
-      const resp = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // important: allow cookies (token/refresh/csrf)
-        body: JSON.stringify(payload),
-      });
-
-      if (resp.status === 201) {
-        setServerMessage('Registration successful. Please check your email to verify your account.');
-        // keep the user on the same page; they may verify email — or navigate to login:
-        toggle(); // switch to "login" view after success
+        if (resp.status === 201) {
+          setStatusMsg('Registration successful — check your email for verification.');
+          setStatusColor('green');
+          form.reset(); // optional: clear form on success
+        } else {
+          // Try parse JSON, otherwise show text
+          const text = await resp.text();
+          setStatusMsg(text || 'Registration failed');
+          setStatusColor('red');
+        }
       } else {
-        // try to show backend message if present
-        const body = await resp.json().catch(() => null);
-        setServerMessage(body?.message || `Registration failed (status ${resp.status})`);
+        // login
+        const resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: values.email, password: values.password }),
+          credentials: 'include',
+        });
+
+        if (resp.status === 200) {
+          setStatusMsg('Login successful — redirecting...');
+          setStatusColor('green');
+          setShowResend(false);
+          setTimeout(() => navigate('/dashboard'), 300);
+        } else if (resp.status === 401) {
+          // usually returns JSON like { status:"fail", message:"email not verified" }
+          const body = await resp.json().catch(() => ({}));
+          const msg: string = (body && (body.message || body.error)) || 'Login failed';
+          if (/verified/i.test(String(msg))) {
+            setStatusMsg('Email not verified — please check your inbox or resend verification.');
+            setStatusColor('yellow');
+            setShowResend(true);
+          } else {
+            setStatusMsg(msg);
+            setStatusColor('red');
+            setShowResend(false);
+          }
+        } else {
+          const text = await resp.text();
+          setStatusMsg(text || 'Login failed');
+          setStatusColor('red');
+          setShowResend(false);
+        }
       }
-    } catch (err: any) {
-      setServerMessage(err?.message || 'Network error');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      setStatusMsg('Network or server error');
+      setStatusColor('red');
+      setShowResend(false);
+      // optional: console.error(err)
     }
   }
 
-  async function handleLogin() {
-    setServerMessage(null);
-    form.clearErrors();
+  async function resendVerification(email?: string) {
+    const targetEmail = email ?? form.values.email;
+    if (!targetEmail) {
+      setStatusMsg('Please enter an email to resend verification to.');
+      setStatusColor('red');
+      return;
+    }
 
-    setLoading(true);
     try {
-      const payload = {
-        email: form.values.email,
-        password: form.values.password,
-      };
-
-      const resp = await fetch('/api/auth/login', {
+      const resp = await fetch('/api/auth/resend-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // important to receive cookies
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ email: targetEmail }),
+        credentials: 'include',
       });
 
-      if (resp.status === 200) {
-        // login success — you may read the response or simply navigate
-        // read body for token if needed
-        // const body = await resp.json();
-        // redirect to dashboard
-        window.location.href = '/dashboard';
+      if (resp.ok) {
+        setStatusMsg('Verification email resent. Check your inbox (or MailHog in dev).');
+        setStatusColor('green');
+        setShowResend(false);
       } else {
-        const body = await resp.json().catch(() => null);
-        setServerMessage(body?.message || `Login failed (status ${resp.status})`);
+        const text = await resp.text();
+        setStatusMsg(text || 'Failed to resend verification');
+        setStatusColor('red');
       }
-    } catch (err: any) {
-      setServerMessage(err?.message || 'Network error');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      setStatusMsg('Network error');
+      setStatusColor('red');
     }
   }
 
@@ -133,16 +162,7 @@ export function AuthenticationForm(props: PaperProps) {
 
       <Divider label="Or continue with email" labelPosition="center" my="lg" />
 
-      <form
-        onSubmit={form.onSubmit(() => {
-          // route submit to register or login handlers
-          if (type === 'register') {
-            handleRegister();
-          } else {
-            handleLogin();
-          }
-        })}
-      >
+      <form onSubmit={form.onSubmit((values) => void submit(values))}>
         <Stack>
           {type === 'register' && (
             <TextInput
@@ -175,41 +195,51 @@ export function AuthenticationForm(props: PaperProps) {
           />
 
           {type === 'register' && (
-            <>
-              <PasswordInput
-                required
-                label="Confirm password"
-                placeholder="Confirm password"
-                value={form.values.passwordConfirm}
-                onChange={(event) => form.setFieldValue('passwordConfirm', event.currentTarget.value)}
-                radius="md"
-              />
+            <PasswordInput
+              required
+              label="Confirm password"
+              placeholder="Confirm password"
+              value={form.values.passwordConfirm}
+              onChange={(event) => form.setFieldValue('passwordConfirm', event.currentTarget.value)}
+              error={form.errors.passwordConfirm}
+              radius="md"
+            />
+          )}
 
-              <Checkbox
-                label="I accept terms and conditions"
-                checked={form.values.terms}
-                onChange={(event) => form.setFieldValue('terms', event.currentTarget.checked)}
-              />
-            </>
+          {type === 'register' && (
+            <Checkbox
+              label="I accept terms and conditions"
+              checked={form.values.terms}
+              onChange={(event) => form.setFieldValue('terms', event.currentTarget.checked)}
+            />
           )}
         </Stack>
-
-        {/* server / submit messages (non-intrusive) */}
-        {serverMessage && (
-          <Text mt="sm" color="red" size="sm" role="alert">
-            {serverMessage}
-          </Text>
-        )}
 
         <Group justify="space-between" mt="xl">
           <Anchor component="button" type="button" c="dimmed" onClick={() => toggle()} size="xs">
             {type === 'register' ? 'Already have an account? Login' : "Don't have an account? Register"}
           </Anchor>
-          <Button type="submit" radius="xl" loading={loading}>
+          <Button type="submit" radius="xl">
             {upperFirst(type)}
           </Button>
         </Group>
       </form>
+
+      {/* status message */}
+      {statusMsg && (
+        <Text mt="md" color={statusColor === 'green' ? 'teal' : statusColor === 'red' ? 'red' : 'yellow'}>
+          {statusMsg}
+        </Text>
+      )}
+
+      {/* resend button (shown when email not verified) */}
+      {showResend && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+          <Button size="xs" variant="outline" onClick={() => void resendVerification()}>
+            Resend verification
+          </Button>
+        </div>
+      )}
     </Paper>
   );
 }
