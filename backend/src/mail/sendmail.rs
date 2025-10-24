@@ -1,16 +1,15 @@
-use std::{env, fs};
 use lettre::{
     message::{header, SinglePart},
     transport::smtp::authentication::Credentials,
-    Message, SmtpTransport,
-    Transport,
+    Message, SmtpTransport, Transport,
 };
+use std::{env, fs};
 
 pub async fn send_email(
     to_email: &str,
     subject: &str,
     template_path: &str,
-    placeholders: &[(String, String)]
+    placeholders: &[(String, String)],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let smtp_username = env::var("SMTP_USERNAME")?;
     let smtp_password = env::var("SMTP_PASSWORD")?;
@@ -28,9 +27,10 @@ pub async fn send_email(
         .to(to_email.parse()?)
         .subject(subject)
         .header(header::ContentType::TEXT_HTML)
-        .singlepart(SinglePart::builder()
-            .header(header::ContentType::TEXT_HTML)
-            .body(html_template)
+        .singlepart(
+            SinglePart::builder()
+                .header(header::ContentType::TEXT_HTML)
+                .body(html_template),
         )?;
 
     let creds = Credentials::new(smtp_username.clone(), smtp_password.clone());
@@ -38,7 +38,7 @@ pub async fn send_email(
         .credentials(creds)
         .port(smtp_port)
         .build();
-    
+
     let result = mailer.send(&email);
 
     match result {

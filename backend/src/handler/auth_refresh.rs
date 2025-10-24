@@ -1,15 +1,28 @@
-use axum::{Extension, Json};
-use axum::http::{StatusCode, header};
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use uuid::Uuid;
+use axum::http::{ HeaderMap};
+use axum::{response::IntoResponse, Extension, Json};
+use axum_extra::extract::cookie::{Cookie, CookieJar};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::sync::Arc;
 use time;
+use uuid::Uuid;
 
-use crate::{AppState, error::HttpError, error::ErrorMessage, utils::refresh as refresh_utils, utils::token as jwt_utils};
+use crate::{
+    error::HttpError,
+    middle_ware::csrf::verify_csrf,
+    utils::refresh as refresh_utils,
+    utils::{token as jwt_utils, token::{cookie_secure}, token::{cookie_same_site}},
+    AppState,
+};
 
 #[derive(Deserialize)]
+pub struct RefreshRequest {
+    pub token_id: String,
+    pub refresh_token: String,
+}
+
+#[derive(Serialize)]
 pub struct RefreshResponse {
     pub access_token: String,
 }
@@ -18,12 +31,15 @@ pub async fn refresh_handler(
     jar: CookieJar,
     Extension(state): Extension<Arc<AppState>>,
     maybe_json: Option<Json<RefreshRequest>>,
-) -> Result<(StatusCode, Json<RefreshResponse>), HttpError> {
-    // Prefer cookie-based flow
+) -> Result<impl IntoResponse, HttpError> {
+    // prefer cookie-based flow; fall back to JSON body for backwards-compat
     let (token_id_str, presented_refresh_plain) = if let (Some(id_cookie), Some(refresh_cookie)) =
         (jar.get("refresh_id"), jar.get("refresh_token"))
     {
-        (id_cookie.value().to_string(), refresh_cookie.value().to_string())
+        (
+            id_cookie.value().to_string(),
+            refresh_cookie.value().to_string(),
+        )
     } else if let Some(Json(req)) = maybe_json {
         (req.token_id.clone(), req.refresh_token.clone())
     } else {
@@ -32,11 +48,11 @@ pub async fn refresh_handler(
         ));
     };
 
-    // parse token_id
+    // parse token id
     let token_uuid = Uuid::parse_str(&token_id_str)
         .map_err(|_| HttpError::bad_request("invalid token_id".to_string()))?;
 
-    // look up in DB
+    // lookup
     let row = state
         .db_client
         .find_refresh_token_by_id(token_uuid)
@@ -49,7 +65,6 @@ pub async fn refresh_handler(
     };
 
     if revoked {
-        // token already revoked -> possible theft: revoke all as extra mitigation
         state
             .db_client
             .revoke_all_refresh_tokens_for_user(user_id)
@@ -60,20 +75,25 @@ pub async fn refresh_handler(
 
     if let Some(expires_at) = maybe_expires {
         if Utc::now() > expires_at {
-            // expired: revoke and return unauthorized
-            state.db_client.revoke_refresh_token_by_id(token_uuid).await.ok();
+            state
+                .db_client
+                .revoke_refresh_token_by_id(token_uuid)
+                .await
+                .ok();
             return Err(HttpError::unauthorized("refresh token expired".to_string()));
         }
     } else {
-        // no expiry -> invalid
         return Err(HttpError::unauthorized("invalid refresh token".to_string()));
     }
 
-    // verify presented refresh token against stored hash
+    // verify presented refresh token
     let ok = refresh_utils::verify_hash(&token_hash, &presented_refresh_plain);
     if !ok {
-        // invalid token -> revoke this token and optionally all tokens for user
-        state.db_client.revoke_refresh_token_by_id(token_uuid).await.ok();
+        state
+            .db_client
+            .revoke_refresh_token_by_id(token_uuid)
+            .await
+            .ok();
         state
             .db_client
             .revoke_all_refresh_tokens_for_user(user_id)
@@ -89,7 +109,7 @@ pub async fn refresh_handler(
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
-   // create new refresh token (plain + id + hash)
+    // create new refresh token, persist
     let new_plain = refresh_utils::generate_refresh_token_plain();
     let new_id = refresh_utils::new_token_id();
     let new_hash = refresh_utils::hash_token(&new_plain)
@@ -102,7 +122,7 @@ pub async fn refresh_handler(
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    // issue a fresh access token (JWT)
+    // issue access token
     let access_token = jwt_utils::create_token(
         &user_id.to_string(),
         state.env.jwt_secret.as_bytes(),
@@ -110,56 +130,44 @@ pub async fn refresh_handler(
     )
     .map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    // Build cookies and attach to response
+    // build cookies
     let access_cookie_duration = time::Duration::minutes(state.env.jwt_maxage * 60);
     let access_cookie = Cookie::build(("token", access_token.clone()))
         .path("/")
         .max_age(access_cookie_duration)
         .http_only(true)
-        .same_site(SameSite::Lax)
-        .finish();
+        .same_site(cookie_same_site())
+        .secure(cookie_secure())
+        .build();
 
     let refresh_cookie_duration = time::Duration::days(30);
     let refresh_cookie = Cookie::build(("refresh_token", new_plain.clone()))
         .path("/")
         .max_age(refresh_cookie_duration)
         .http_only(true)
-        .same_site(SameSite::Lax)
-        .finish();
+        .same_site(cookie_same_site())
+        .secure(cookie_secure())
+        .build();
 
     let refresh_id_cookie = Cookie::build(("refresh_id", new_id.to_string()))
         .path("/")
         .max_age(refresh_cookie_duration)
         .http_only(true)
-        .same_site(SameSite::Lax)
-        .finish();
+        .same_site(cookie_same_site())
+        .secure(cookie_secure())
+        .build();
 
-    let mut resp = (StatusCode::OK, Json(RefreshResponse { access_token })).into_response();
-    resp.headers_mut().append(
-        header::SET_COOKIE,
-        access_cookie.to_string().parse().unwrap(),
-    );
-    resp.headers_mut().append(
-        header::SET_COOKIE,
-        refresh_cookie.to_string().parse().unwrap(),
-    );
-    resp.headers_mut().append(
-        header::SET_COOKIE,
-        refresh_id_cookie.to_string().parse().unwrap(),
-    );
+    // Add cookies to the CookieJar and return it with the JSON response
+    let jar = jar
+        .add(access_cookie)
+        .add(refresh_cookie)
+        .add(refresh_id_cookie);
 
-    // safe to unwrap because we constructed the response above
-    Ok((StatusCode::OK, Json(RefreshResponse { access_token: "".to_string() })))
-        .and_then(|_| {
-            // We already built the response as 'resp' with cookies; convert to expected return type.
-            // To keep the function signature, return the access_token in Json too:
-            let body_access = resp
-                .headers()
-                .get_all(header::SET_COOKIE); // noop to avoid unused warning
-            // Extract the access_token string from the earlier response variable:
-            // (we already have it as access_token variable above)
-            Ok((StatusCode::OK, Json(RefreshResponse { access_token: access_cookie.value().to_string() })))
-        })?
+    let body = RefreshResponse {
+        access_token: access_token.clone(),
+    };
+
+    Ok((jar, Json(body)))
 }
 
 #[derive(Deserialize)]
@@ -169,13 +177,26 @@ pub struct LogoutRequest {
 
 pub async fn logout_handler(
     jar: CookieJar,
+    headers: HeaderMap,
     Extension(state): Extension<Arc<AppState>>,
     maybe_json: Option<Json<LogoutRequest>>,
-) -> Result<(StatusCode, Json<serde_json::Value>), HttpError> {
-    // Try cookie first
+) -> Result<impl IntoResponse, HttpError> {
+    // If request is cookie-based (client sent refresh_id cookie), require CSRF double-submit:
+    // If cookies are present, verify X-CSRF-Token header matches csrf_token cookie.
+    if jar.get("refresh_id").is_some() {
+        if !verify_csrf(&headers, &jar) {
+            return Err(HttpError::unauthorized("invalid csrf token".to_string()));
+        }
+    }
+
+    // revoke from cookie or JSON
     if let Some(refresh_id_cookie) = jar.get("refresh_id") {
         if let Ok(token_uuid) = Uuid::parse_str(refresh_id_cookie.value()) {
-            state.db_client.revoke_refresh_token_by_id(token_uuid).await.ok();
+            state
+                .db_client
+                .revoke_refresh_token_by_id(token_uuid)
+                .await
+                .ok();
         }
     } else if let Some(Json(req)) = maybe_json {
         let token_uuid = Uuid::parse_str(&req.token_id)
@@ -185,8 +206,6 @@ pub async fn logout_handler(
             .revoke_refresh_token_by_id(token_uuid)
             .await
             .map_err(|e| HttpError::server_error(e.to_string()))?;
-    } else {
-        // Nothing to revoke, still return success but clear cookies
     }
 
     // Clear cookies by setting Max-Age=0
@@ -194,22 +213,28 @@ pub async fn logout_handler(
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .finish();
+        .same_site(cookie_same_site())
+        .secure(cookie_secure())
+        .build();
     let clear_refresh = Cookie::build(("refresh_token", ""))
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .finish();
+        .same_site(cookie_same_site())
+        .secure(cookie_secure())
+        .build();
     let clear_refresh_id = Cookie::build(("refresh_id", ""))
         .path("/")
         .max_age(time::Duration::seconds(0))
         .http_only(true)
-        .finish();
+        .same_site(cookie_same_site())
+        .secure(cookie_secure())
+        .build();
 
-    let mut response = (StatusCode::OK, Json(serde_json::json!({"status":"success","message":"logged out"}))).into_response();
-    response.headers_mut().append(header::SET_COOKIE, clear_cookie.to_string().parse().unwrap());
-    response.headers_mut().append(header::SET_COOKIE, clear_refresh.to_string().parse().unwrap());
-    response.headers_mut().append(header::SET_COOKIE, clear_refresh_id.to_string().parse().unwrap());
+    // Add clear cookies to the jar and return
+    let jar = jar.add(clear_cookie).add(clear_refresh).add(clear_refresh_id);
 
-    Ok((StatusCode::OK, Json(serde_json::json!({"status":"success","message":"logged out"}))))
+    let body = Json(json!({"status":"success","message":"logged out"}));
+
+    Ok((jar, body))
 }

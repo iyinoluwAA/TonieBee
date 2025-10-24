@@ -1,11 +1,5 @@
 use argon2::{
-    password_hash::{
-        rand_core::OsRng,
-        PasswordHash,
-        PasswordHasher,
-        PasswordVerifier,
-        SaltString
-    },
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
 
@@ -26,15 +20,14 @@ pub fn hash(password: impl Into<String>) -> Result<String, ErrorMessage> {
 
     let salt = SaltString::generate(&mut OsRng);
     let hashed_password = Argon2::default()
-            .hash_password( password.as_bytes(), &salt)
-            .map_err(|_| ErrorMessage::HashingError)?
-            .to_string();
-    
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|_| ErrorMessage::HashingError)?
+        .to_string();
+
     Ok(hashed_password)
 }
 
 pub fn compare(password: &str, hashed_password: &str) -> Result<bool, ErrorMessage> {
-
     if password.is_empty() {
         return Err(ErrorMessage::EmptyPassword);
     }
@@ -43,12 +36,12 @@ pub fn compare(password: &str, hashed_password: &str) -> Result<bool, ErrorMessa
         return Err(ErrorMessage::ExceededMaxPasswordLength(MAX_PASSWORD_LENGTH));
     }
 
-    let parsed_hash = PasswordHash::new(hashed_password)
-            .map_err(|_| ErrorMessage::InvalidHashFormat)?;
+    let parsed_hash =
+        PasswordHash::new(hashed_password).map_err(|_| ErrorMessage::InvalidHashFormat)?;
 
     let password_matched = Argon2::default()
         .verify_password(password.as_bytes(), &parsed_hash)
-        .map_or(false, |_| true);
+        .is_ok();
 
     Ok(password_matched)
-} 
+}

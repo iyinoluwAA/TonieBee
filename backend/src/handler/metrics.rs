@@ -1,7 +1,7 @@
+use crate::AppState;
 use axum::{Extension, Json};
 use serde_json::json;
 use std::sync::Arc;
-use crate::AppState;
 
 pub async fn uptime(Extension(state): Extension<Arc<AppState>>) -> Json<serde_json::Value> {
     let elapsed = state.start_time.elapsed();
