@@ -22,7 +22,7 @@ use db::DBClient;
 use dotenv::dotenv;
 use routes::create_router;
 use sqlx::postgres::PgPoolOptions;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing_subscriber::filter::LevelFilter;
 
 #[derive(Debug, Clone)]
@@ -58,12 +58,11 @@ async fn main() {
     };
 
     // Allow both common frontend dev ports (Vite default is 5173, but some setups use 3000)
-    let allowed_origins = vec![
-        "http://localhost:5173".parse::<HeaderValue>().unwrap(), // Vite default
-        "http://localhost:3000".parse::<HeaderValue>().unwrap(), // Alternative
-    ];
     let cors = CorsLayer::new()
-        .allow_origins(allowed_origins)
+        .allow_origin(AllowOrigin::predicate(|origin: &HeaderValue, _request_head: &_| {
+            let origin_str = origin.to_str().unwrap_or("");
+            origin_str == "http://localhost:5173" || origin_str == "http://localhost:3000"
+        }))
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
         .allow_credentials(true)
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE]);
