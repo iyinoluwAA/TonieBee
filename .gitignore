@@ -46,3 +46,48 @@ target/
 logs/
 *.log
 
+# Environment files with sensitive data
+.env.mailhog
+.env.production
+.env.development
+backend/.env.mailhog
+backend/.env.production
+
+# Personal development notes and plans
+2_WEEK_BUILD_PLAN.md
+2_WEEK_INTENSIVE_PLAN.md
+BUILD_PROGRESS.md
+PROGRESS_SUMMARY.md
+IMPLEMENTATION_STATUS.md
+
+# Files with sensitive credentials (OAuth secrets, API keys, etc.)
+ADD_OAUTH_CREDENTIALS.md
+README_OAUTH_SETUP.md
+
+# Duplicate files
+QUICK_SUMMON copy.txt
+
+# Personal command references with sensitive info
+COMMANDS.md
+
+# Documentation files (keeping only PROJECT_VISION_AND_RECOMMENDATIONS.md)
+ADMIN_ACCESS.md
+AUTH_ENHANCEMENT_PLAN.md
+CLIENT_PORTAL_ENHANCEMENTS.md
+COMPLETE_FEATURE_CHECKLIST.md
+COMPLETE_PROJECT_SUMMARY.md
+DASHBOARD_FEATURES.md
+OAUTH_SETUP_GUIDE.md
+QUICK_START_OAUTH.md
+QUOTE_SYSTEM_ENHANCEMENTS.md
+QUOTE_SYSTEM_SECURITY.md
+SECURITY_COMPLETE.md
+SECURITY_HARDENING.md
+SESSION_MANAGEMENT_ANSWER.md
+SOCIAL_LOGIN_IMPLEMENTATION.md
+SOCIAL_LOGIN_SUMMARY.md
+SUMMON_UI_SAGE.md
+TWITTER_OAUTH_SETUP.md
+TWITTER_URL_FIX.md
+UI_SAGE_DESIGN_PLAN.md
+QUICK_SUMMON.txt
