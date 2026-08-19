@@ -1,18 +1,19 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::Query,
+    extract::{Path as AxumPath, Query},
     middleware,
     response::IntoResponse,
-    routing::{get, put},
+    routing::{delete, get, post, put},
     Extension, Json, Router,
 };
+use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
     db::UserExt,
     dtos::{
-        FilterUserDto, NameUpdateDto, RequestQueryDto, Response, RoleUpdateDto, UserData,
+        CreateUserDto, FilterUserDto, NameUpdateDto, RequestQueryDto, Response, RoleUpdateDto, UserData,
         UserListResponseDto, UserPasswordUpdateDto, UserResponseDto,
     },
     error::{ErrorMessage, HttpError},
@@ -31,6 +32,12 @@ pub fn users_handler() -> Router {
             })),
         )
         .route(
+            "/admins",
+            get(get_admin_users).layer(middleware::from_fn(|state, req, next| {
+                role_check(state, req, next, vec![UserRole::Admin])
+            })),
+        )
+        .route(
             "/users",
             get(get_users).layer(middleware::from_fn(|state, req, next| {
                 role_check(state, req, next, vec![UserRole::Admin])
@@ -39,6 +46,18 @@ pub fn users_handler() -> Router {
         .route("/name", put(update_user_name))
         .route("/role", put(update_user_role))
         .route("/password", put(update_user_password))
+        .route(
+            "/users/:id",
+            delete(delete_user).layer(middleware::from_fn(|state, req, next| {
+                role_check(state, req, next, vec![UserRole::Admin])
+            })),
+        )
+        .route(
+            "/users",
+            post(create_user).layer(middleware::from_fn(|state, req, next| {
+                role_check(state, req, next, vec![UserRole::Admin])
+            })),
+        )
 }
 
 pub async fn get_me(
@@ -55,6 +74,30 @@ pub async fn get_me(
     };
 
     Ok(Json(response_data))
+}
+
+pub async fn get_admin_users(
+    Extension(app_state): Extension<Arc<AppState>>,
+) -> Result<impl IntoResponse, HttpError> {
+    // Get all users and filter for admins
+    let all_users = app_state
+        .db_client
+        .get_users(1, 1000) // Get up to 1000 users
+        .await
+        .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    let admin_users: Vec<_> = all_users
+        .into_iter()
+        .filter(|u| u.role == UserRole::Admin)
+        .collect();
+
+    let response = UserListResponseDto {
+        status: "success".to_string(),
+        users: FilterUserDto::filter_users(&admin_users),
+        results: admin_users.len() as i64,
+    };
+
+    Ok(Json(response))
 }
 
 pub async fn get_users(
@@ -121,19 +164,31 @@ pub async fn update_user_name(
 
 pub async fn update_user_role(
     Extension(app_state): Extension<Arc<AppState>>,
-    Extension(user): Extension<JWTAuthMiddeware>,
+    Extension(auth_user): Extension<JWTAuthMiddeware>,
     Json(body): Json<RoleUpdateDto>,
 ) -> Result<impl IntoResponse, HttpError> {
+    // Log the received body for debugging
+    eprintln!("Received role update request: user_id={:?}, role={:?}", body.user_id, body.role);
+    
     body.validate()
-        .map_err(|e| HttpError::bad_request(e.to_string()))?;
+        .map_err(|e| {
+            eprintln!("Validation error: {:?}", e);
+            HttpError::bad_request(format!("Validation failed: {}", e))
+        })?;
 
-    let user = &user.user;
-
-    let user_id = uuid::Uuid::parse_str(&user.id.to_string()).unwrap();
+    // If user_id is provided, admin is updating another user's role
+    // Otherwise, user is updating their own role
+    let target_user_id = if let Some(user_id_str) = &body.user_id {
+        Uuid::parse_str(user_id_str)
+            .map_err(|_| HttpError::bad_request("Invalid user ID".to_string()))?
+    } else {
+        // User updating their own role
+        auth_user.user.id
+    };
 
     let result = app_state
         .db_client
-        .update_user_role(user_id.clone(), body.role)
+        .update_user_role(target_user_id, body.role)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
@@ -181,7 +236,7 @@ pub async fn update_user_password(
     }
 
     let hash_password =
-        password::hash(&body.new_password).map_err(|e| HttpError::server_error(e.to_string()))?;
+        password::hash(&body.new_password, true).map_err(|e| HttpError::server_error(e.to_string()))?;
 
     app_state
         .db_client
@@ -192,6 +247,87 @@ pub async fn update_user_password(
     let response = Response {
         message: "password updated successfully".to_string(),
         status: "success",
+    };
+
+    Ok(Json(response))
+}
+
+pub async fn delete_user(
+    AxumPath(id): AxumPath<String>,
+    Extension(app_state): Extension<Arc<AppState>>,
+) -> Result<impl IntoResponse, HttpError> {
+    let user_id = Uuid::parse_str(&id)
+        .map_err(|_| HttpError::bad_request("Invalid user ID".to_string()))?;
+
+    // Check if user exists
+    let user = app_state
+        .db_client
+        .get_user(Some(user_id), None, None, None)
+        .await
+        .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    if user.is_none() {
+        return Err(HttpError::bad_request("User not found".to_string()));
+    }
+
+    // Delete user
+    app_state
+        .db_client
+        .delete_user(user_id)
+        .await
+        .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    let response = Response {
+        status: "success",
+        message: "User deleted successfully".to_string(),
+    };
+
+    Ok(Json(response))
+}
+
+pub async fn create_user(
+    Extension(app_state): Extension<Arc<AppState>>,
+    Json(body): Json<CreateUserDto>,
+) -> Result<impl IntoResponse, HttpError> {
+    body.validate()
+        .map_err(|e| HttpError::bad_request(e.to_string()))?;
+
+    // Check if email already exists
+    let existing_user = app_state
+        .db_client
+        .get_user(None, None, Some(&body.email), None)
+        .await
+        .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    if existing_user.is_some() {
+        return Err(HttpError::bad_request(
+            "Email already registered".to_string(),
+        ));
+    }
+
+    // Hash password
+    let hashed_password =
+        password::hash(&body.password, true).map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    // Create user
+    let user = app_state
+        .db_client
+        .create_user_by_admin(
+            &body.name,
+            &body.email,
+            &hashed_password,
+            body.role,
+        )
+        .await
+        .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    let filtered_user = FilterUserDto::filter_user(&user);
+
+    let response = UserResponseDto {
+        status: "success".to_string(),
+        data: UserData {
+            user: filtered_user,
+        },
     };
 
     Ok(Json(response))

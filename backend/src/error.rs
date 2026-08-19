@@ -22,10 +22,12 @@ impl fmt::Display for ErrorResponse {
 pub enum ErrorMessage {
     EmptyPassword,
     ExceededMaxPasswordLength(usize),
+    WeakPassword(String),
     InvalidHashFormat,
     HashingError,
     InvalidToken,
-    WrongCredentials,
+    #[allow(dead_code)]
+    WrongCredentials, // Kept for potential future use
     EmailExist,
     UserNoLongerExist,
     TokenNotProvided,
@@ -44,7 +46,7 @@ impl fmt::Display for ErrorMessage {
 impl ErrorMessage {
     fn to_str(&self) -> String {
         match self {
-            ErrorMessage::WrongCredentials => "Email or password is wrong".to_string(),
+            ErrorMessage::WrongCredentials => "Invalid email or password".to_string(),
             ErrorMessage::EmailExist => "A user with this email already exists".to_string(),
             ErrorMessage::UserNoLongerExist => {
                 "User belonging to this token no longer exists".to_string()
@@ -55,6 +57,7 @@ impl ErrorMessage {
             ErrorMessage::ExceededMaxPasswordLength(max_length) => {
                 format!("Password must not be more than {} characters", max_length)
             }
+            ErrorMessage::WeakPassword(msg) => msg.clone(),
             ErrorMessage::InvalidToken => "Authentication token is invalid or expired".to_string(),
             ErrorMessage::TokenNotProvided => {
                 "You are not logged in, please provide a token".to_string()
@@ -107,6 +110,27 @@ impl HttpError {
         HttpError {
             message: message.into(),
             status: StatusCode::UNAUTHORIZED,
+        }
+    }
+
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        HttpError {
+            message: message.into(),
+            status: StatusCode::FORBIDDEN,
+        }
+    }
+
+    pub fn not_found(message: impl Into<String>) -> Self {
+        HttpError {
+            message: message.into(),
+            status: StatusCode::NOT_FOUND,
+        }
+    }
+
+    pub fn too_many_requests(message: impl Into<String>) -> Self {
+        HttpError {
+            message: message.into(),
+            status: StatusCode::TOO_MANY_REQUESTS,
         }
     }
 

@@ -1,9 +1,22 @@
 use chrono::{DateTime, Utc};
 use core::str;
 use serde::{Deserialize, Serialize};
-use validator::Validate;
+use validator::{Validate, ValidationError};
 
 use crate::models::{User, UserRole};
+use crate::utils::email_validation;
+
+fn validate_email_custom(email: &str) -> Result<(), ValidationError> {
+    email_validation::validate_email(email)
+}
+
+fn must_be_true(terms_accepted: &bool) -> Result<(), ValidationError> {
+    if *terms_accepted {
+        Ok(())
+    } else {
+        Err(ValidationError::new("terms_not_accepted"))
+    }
+}
 
 #[derive(Validate, Debug, Default, Clone, Serialize, Deserialize)]
 pub struct RegisterUserDto {
@@ -11,7 +24,8 @@ pub struct RegisterUserDto {
     pub name: String,
     #[validate(
         length(min = 1, message = "Email is required"),
-        email(message = "Email is invalid")
+        email(message = "Email is invalid"),
+        custom = "validate_email_custom"
     )]
     pub email: String,
     #[validate(
@@ -25,13 +39,17 @@ pub struct RegisterUserDto {
     )]
     #[serde(rename = "passwordconfirm")]
     pub password_confirm: String,
+    #[validate(custom(function = "must_be_true", message = "You must accept the Terms and Conditions to register"))]
+    #[serde(rename = "termsAccepted")]
+    pub terms_accepted: bool,
 }
 
 #[derive(Validate, Debug, Default, Clone, Serialize, Deserialize)]
 pub struct LoginUserDto {
     #[validate(
         length(min = 1, message = "Email is required"),
-        email(message = "Email is invalid")
+        email(message = "Email is invalid"),
+        custom = "validate_email_custom"
     )]
     pub email: String,
     #[validate(
@@ -56,6 +74,8 @@ pub struct FilterUserDto {
     pub email: String,
     pub role: String,
     pub verified: bool,
+    #[serde(rename = "twoFactorEnabled")]
+    pub two_factor_enabled: Option<bool>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
     #[serde(rename = "updatedAt")]
@@ -70,6 +90,7 @@ impl FilterUserDto {
             email: user.email.to_owned(),
             verified: user.verified,
             role: user.role.as_str().to_string(),
+            two_factor_enabled: user.two_factor_enabled,
             created_at: user.created_at.unwrap(),
             updated_at: user.updated_at.unwrap(),
         }
@@ -106,6 +127,8 @@ pub struct UserLoginResponseDto {
     pub refresh_token_id: Option<String>,
     #[serde(rename = "refreshToken")]
     pub refresh_token: Option<String>,
+    #[serde(rename = "recoveryCodeUsed")]
+    pub recovery_code_used: Option<bool>, // Indicates if a recovery code was used for login
 }
 
 #[derive(Serialize, Deserialize)]
@@ -122,6 +145,7 @@ pub struct NameUpdateDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct RoleUpdateDto {
+    pub user_id: Option<String>, // Optional: if provided, admin is updating another user's role
     #[validate(custom = "validate_user_role")]
     pub role: UserRole,
 }
@@ -192,4 +216,23 @@ pub struct ResetPasswordRequestDto {
         must_match(other = "new_password", message = "new passwords do not match")
     )]
     pub new_password_confirm: String,
+}
+
+#[derive(Debug, Validate, Clone, Serialize, Deserialize)]
+pub struct CreateUserDto {
+    #[validate(length(min = 1, message = "Name is required"))]
+    pub name: String,
+    #[validate(
+        length(min = 1, message = "Email is required"),
+        email(message = "Email is invalid"),
+        custom = "validate_email_custom"
+    )]
+    pub email: String,
+    #[validate(
+        length(min = 1, message = "Password is required"),
+        length(min = 6, message = "Password must be at least 6 characters")
+    )]
+    pub password: String,
+    #[validate(custom = "validate_user_role")]
+    pub role: UserRole,
 }

@@ -4,10 +4,14 @@ use argon2::{
 };
 
 use crate::error::ErrorMessage;
+use crate::utils::password_validation;
 
-const MAX_PASSWORD_LENGTH: usize = 64;
+const MAX_PASSWORD_LENGTH: usize = 128;
 
-pub fn hash(password: impl Into<String>) -> Result<String, ErrorMessage> {
+/// Hash a password with Argon2 after validating strength
+/// For registration and password reset, validate strength
+/// For login verification, skip validation (password already set)
+pub fn hash(password: impl Into<String>, validate_strength: bool) -> Result<String, ErrorMessage> {
     let password = password.into();
 
     if password.is_empty() {
@@ -16,6 +20,11 @@ pub fn hash(password: impl Into<String>) -> Result<String, ErrorMessage> {
 
     if password.len() > MAX_PASSWORD_LENGTH {
         return Err(ErrorMessage::ExceededMaxPasswordLength(MAX_PASSWORD_LENGTH));
+    }
+
+    // Validate password strength if requested (for registration/reset)
+    if validate_strength {
+        password_validation::validate_password_strength(&password)?;
     }
 
     let salt = SaltString::generate(&mut OsRng);

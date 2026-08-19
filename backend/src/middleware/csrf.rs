@@ -13,3 +13,4 @@ pub fn verify_csrf(headers: &HeaderMap, jar: &CookieJar) -> bool {
 
     header_token.is_some() && cookie_token.is_some() && header_token == cookie_token
 }
+

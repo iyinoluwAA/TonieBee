@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recovery Codes Expiring Soon</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #1E40AF 0%, #0D9488 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .content {
+            background: #f9f9f9;
+            padding: 30px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .warning-box h2 {
+            color: #856404;
+            margin-top: 0;
+        }
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #1E40AF 0%, #0D9488 100%);
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        .days-remaining {
+            font-size: 32px;
+            font-weight: bold;
+            color: #dc3545;
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔐 Recovery Codes Expiring Soon</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{username}},</p>
+        
+        <div class="warning-box">
+            <h2>⚠️ Important Security Notice</h2>
+            <p>Your 2FA recovery codes will expire soon!</p>
+            <div class="days-remaining">{{days_remaining}} Days Remaining</div>
+        </div>
+        
+        <p>This is a reminder that your recovery codes for two-factor authentication will expire in <strong>{{days_remaining}} days</strong>.</p>
+        
+        <p><strong>What are recovery codes?</strong><br>
+        Recovery codes are backup codes that allow you to access your account if you lose access to your authenticator app.</p>
+        
+        <p><strong>What should you do?</strong></p>
+        <ul>
+            <li>Log in to your account and go to your Profile</li>
+            <li>Navigate to the "Recovery Codes" section</li>
+            <li>Click "Regenerate Codes" to create new recovery codes</li>
+            <li>Save the new codes in a secure location (password manager, encrypted file, etc.)</li>
+        </ul>
+        
+        <div style="text-align: center;">
+            <a href="http://localhost:5173/profile" class="button">Manage Recovery Codes</a>
+        </div>
+        
+        <p><strong>Security Tip:</strong> Never share your recovery codes with anyone. Store them securely and only use them when you cannot access your authenticator app.</p>
+        
+        <p>If you have any questions or concerns, please contact our support team.</p>
+        
+        <p>Stay secure,<br>
+        The Toniebee Team</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated security notification. Please do not reply to this email.</p>
+        <p>&copy; 2024 Toniebee. All rights reserved.</p>
+    </div>
+</body>
+</html>
+

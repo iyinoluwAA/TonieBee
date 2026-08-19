@@ -8,7 +8,9 @@ mod middleware;
 mod models;
 mod routes;
 mod utils;
-mod middle_ware;
+
+// Ensure oauth module is included
+pub use utils::oauth;
 
 
 use std::{sync::Arc, time::Instant};
@@ -42,8 +44,13 @@ async fn main() {
 
     let config = Config::init();
 
+    // Configure database pool with security settings
+    // Note: SSL is configured in DATABASE_URL itself (e.g., ?sslmode=require)
+    // For production, ensure DATABASE_URL includes SSL parameters like:
+    // postgresql://user:pass@host/db?sslmode=require
     let pool = match PgPoolOptions::new()
         .max_connections(10)
+        .min_connections(2)
         .connect(&config.database_url)
         .await
     {

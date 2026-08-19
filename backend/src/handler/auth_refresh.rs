@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     error::HttpError,
-    middle_ware::csrf::verify_csrf,
+    middleware::csrf::verify_csrf,
     utils::refresh as refresh_utils,
     utils::{token as jwt_utils, token::{cookie_secure}, token::{cookie_same_site}},
     AppState,

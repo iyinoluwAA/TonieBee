@@ -11,10 +11,40 @@ pub async fn send_email(
     template_path: &str,
     placeholders: &[(String, String)],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let smtp_username = env::var("SMTP_USERNAME")?;
-    let smtp_password = env::var("SMTP_PASSWORD")?;
-    let smtp_server = env::var("SMTP_SERVER")?;
-    let smtp_port: u16 = env::var("SMTP_PORT")?.parse()?;
+    // In development, use MailHog (no auth, no TLS)
+    // In production, use authenticated SMTP with TLS
+    let is_dev = std::env::var("RUST_ENV").unwrap_or_default() != "production";
+    
+    // Get SMTP settings with defaults for MailHog
+    let smtp_server = if is_dev {
+        env::var("SMTP_SERVER").unwrap_or_else(|_| "127.0.0.1".to_string())
+    } else {
+        env::var("SMTP_SERVER")?
+    };
+    
+    let smtp_port: u16 = if is_dev {
+        env::var("SMTP_PORT")
+            .unwrap_or_else(|_| "1025".to_string())
+            .parse()
+            .unwrap_or(1025)
+    } else {
+        env::var("SMTP_PORT")?.parse()?
+    };
+    
+    let is_mailhog = smtp_server == "127.0.0.1" || smtp_server == "localhost";
+    
+    // Only require username/password for real SMTP (not MailHog)
+    let smtp_username = if is_dev && is_mailhog {
+        env::var("SMTP_USERNAME").unwrap_or_else(|_| "dev@localhost".to_string())
+    } else {
+        env::var("SMTP_USERNAME")?
+    };
+    
+    let smtp_password = if is_dev && is_mailhog {
+        env::var("SMTP_PASSWORD").unwrap_or_else(|_| "".to_string())
+    } else {
+        env::var("SMTP_PASSWORD")?
+    };
 
     let mut html_template = fs::read_to_string(template_path)?;
 
@@ -32,12 +62,20 @@ pub async fn send_email(
                 .header(header::ContentType::TEXT_HTML)
                 .body(html_template),
         )?;
-
-    let creds = Credentials::new(smtp_username.clone(), smtp_password.clone());
-    let mailer = SmtpTransport::starttls_relay(&smtp_server)?
-        .credentials(creds)
-        .port(smtp_port)
-        .build();
+    
+    let mailer = if is_dev && is_mailhog {
+        // MailHog: no authentication, no TLS
+        SmtpTransport::builder_dangerous(smtp_server)
+            .port(smtp_port)
+            .build()
+    } else {
+        // Production SMTP: use authentication and TLS
+        let creds = Credentials::new(smtp_username.clone(), smtp_password.clone());
+        SmtpTransport::starttls_relay(&smtp_server)?
+            .credentials(creds)
+            .port(smtp_port)
+            .build()
+    };
 
     let result = mailer.send(&email);
 
