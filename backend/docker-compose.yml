@@ -1,0 +1,25 @@
+# Local development database only (never used in production).
+#   docker compose -f backend/docker-compose.yml up -d
+# Port 5436, reachable from this computer only: 5433 (stalbet), 5434 (spectra)
+# and 5435 (investment-app) belong to AJ's other projects.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: toniebee-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: toniebee
+      POSTGRES_PASSWORD: toniebee-dev-only
+      POSTGRES_DB: toniebee
+    ports:
+      - "127.0.0.1:5436:5432"
+    volumes:
+      - toniebee_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toniebee -d toniebee"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  toniebee_pgdata:

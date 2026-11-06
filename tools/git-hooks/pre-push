@@ -1,0 +1,50 @@
+#!/bin/sh
+# TonieBee pre-push guard (turn it on once per clone: git config core.hooksPath tools/git-hooks)
+#
+# 1. Never push straight to main. Push a branch, check it, then merge it on GitHub.
+# 2. The website must typecheck and build, and the API must be formatted and lint-clean,
+#    before anything leaves this machine. (CI also runs the database tests on every PR.)
+#
+# Emergency override (use sparingly): git push --no-verify
+
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "✋ Pushing straight to main is blocked." >&2
+    echo "   Push a branch instead, open a pull request, then merge it on GitHub." >&2
+    exit 1
+  fi
+done
+
+root="$(git rev-parse --show-toplevel)"
+# Node comes from nvm, which only loads in interactive bash terminals: ask bash where it is.
+if ! command -v npm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]; then
+  nvm_bin="$(bash -c '. "$HOME/.nvm/nvm.sh" >/dev/null 2>&1; dirname "$(command -v npm)"' 2>/dev/null)"
+  [ -n "$nvm_bin" ] && PATH="$nvm_bin:$PATH" && export PATH
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "✋ npm not found, so the website's build can't be checked. Open a new terminal and push again." >&2
+  exit 1
+fi
+
+cd "$root/frontend" || exit 1
+echo "▶ Website: typecheck + lint + build before push…"
+if ! out="$(npm run check 2>&1)"; then
+  echo "$out" | tail -30 >&2
+  echo "✋ Website checks failed — push blocked. Fix the errors above first." >&2
+  exit 1
+fi
+
+if [ -f "$root/backend/Cargo.toml" ] && command -v cargo >/dev/null 2>&1; then
+  cd "$root/backend" || exit 1
+  echo "▶ API: fmt + clippy…"
+  if ! cargo fmt --check >/dev/null 2>&1; then
+    echo "✋ The API isn't formatted — run: (cd backend && cargo fmt)" >&2
+    exit 1
+  fi
+  if ! out="$(SQLX_OFFLINE=true cargo clippy --all-targets --quiet -- -D warnings 2>&1)"; then
+    echo "$out" | tail -30 >&2
+    echo "✋ API lint failed — push blocked." >&2
+    exit 1
+  fi
+fi
+echo "✓ Checks OK — pushing."
