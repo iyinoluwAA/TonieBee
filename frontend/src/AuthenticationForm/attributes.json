@@ -1,9 +1,0 @@
-{
-  "title": "Authentication form",
-  "category": "authentication",
-  "dimmed": true,
-  "canvas": {
-    "center": true,
-    "maxWidth": 420
-  }
-}

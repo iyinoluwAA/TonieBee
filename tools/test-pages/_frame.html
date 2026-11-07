@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SPECTRA · device frame</title>
+<style>
+  body { margin: 0; background: #2a2a2a; }
+  iframe { display: block; border: 0; background: #000; }
+</style></head>
+<body>
+<script>
+  // Renders a route at an exact device width (Chrome won't shrink a window
+  // below ~500px, so real phone widths need a frame). ?w=390&h=1600&src=/shop
+  const q = new URLSearchParams(location.search);
+  const f = document.createElement('iframe');
+  f.width = q.get('w') || 390;
+  f.height = q.get('h') || 1600;
+  const src = q.get('src') || '/';
+  f.src = src + (src.includes('?') ? '&' : '?') + 'intro=0';
+  document.body.appendChild(f);
+</script>
+</body></html>

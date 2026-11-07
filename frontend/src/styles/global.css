@@ -1,0 +1,318 @@
+/* TonieBee — site-wide styles. Brand colours as variables (docs/EDITING.md). */
+:root {
+  --tb-navy: #1e40af;
+  --tb-navy-deep: #14296c;
+  --tb-ink: #14213d;
+  --tb-muted: #4a5568;
+  --tb-teal: #0d9488;
+  --tb-accent: #c2570a; /* orange dark enough for text on white (AA) */
+  --tb-cta: #f26b07;
+  --tb-soft: #f3f6fb;
+  --tb-line: #dfe5ee;
+  --tb-max: 1160px;
+}
+
+html {
+  scroll-padding-top: 80px;
+}
+body {
+  color: var(--tb-ink);
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Layout */
+.tb-container {
+  width: 100%;
+  max-width: var(--tb-max);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+.tb-section {
+  padding: clamp(48px, 7vw, 88px) 0;
+}
+.tb-section--soft {
+  background: var(--tb-soft);
+}
+.tb-eyebrow {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tb-teal);
+}
+.tb-lead {
+  font-size: clamp(1.05rem, 1.6vw, 1.2rem);
+  line-height: 1.6;
+  color: var(--tb-muted);
+}
+.tb-prose p {
+  line-height: 1.7;
+  margin: 0 0 1em;
+}
+.tb-prose h2 {
+  margin: 1.6em 0 0.5em;
+}
+.tb-prose ul {
+  padding-left: 1.2em;
+  line-height: 1.7;
+}
+
+/* Skip link: first thing a keyboard reaches */
+.tb-skip {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 1000;
+  background: var(--tb-navy);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.tb-skip:focus {
+  top: 12px;
+}
+
+/* Header */
+.tb-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: saturate(180%) blur(10px);
+  border-bottom: 1px solid var(--tb-line);
+}
+.tb-header__inner {
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.tb-wordmark {
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: -0.01em;
+  color: var(--tb-navy-deep);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.tb-wordmark__mark {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.tb-nav a {
+  color: var(--tb-ink);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.95rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.tb-nav a:hover {
+  background: var(--tb-soft);
+}
+.tb-nav a.active {
+  color: var(--tb-navy);
+  background: #eef3ff;
+}
+
+/* Hero */
+.tb-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 500px at 85% -10%, rgba(13, 148, 136, 0.16), transparent 60%),
+    radial-gradient(900px 480px at -10% 110%, rgba(30, 64, 175, 0.14), transparent 60%),
+    linear-gradient(180deg, #f7f9fd 0%, #ffffff 100%);
+  padding: clamp(36px, 6vw, 76px) 0 clamp(44px, 6vw, 80px);
+}
+.tb-hero--compact {
+  padding: clamp(28px, 4vw, 48px) 0 clamp(24px, 3.5vw, 40px);
+}
+.tb-hero--compact + .tb-section {
+  padding-top: clamp(28px, 4vw, 48px);
+}
+.tb-page-title {
+  font-size: clamp(1.75rem, 3.2vw, 2.4rem);
+}
+.tb-hero__art {
+  width: 100%;
+  max-width: 440px;
+  margin-left: auto;
+}
+
+/* Cards */
+.tb-card {
+  height: 100%;
+  border: 1px solid var(--tb-line);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+a.tb-card {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+a.tb-card:hover,
+a.tb-card:focus-visible {
+  border-color: var(--tb-navy);
+  box-shadow: 0 10px 30px rgba(20, 41, 108, 0.08);
+  transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  a.tb-card:hover,
+  a.tb-card:focus-visible {
+    transform: none;
+  }
+}
+.tb-step {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: #fff;
+  background: var(--tb-teal);
+}
+
+/* The closing band on every page */
+.tb-band {
+  background: linear-gradient(135deg, var(--tb-navy-deep), var(--tb-navy));
+  color: #fff;
+  border-radius: 24px;
+  padding: clamp(28px, 5vw, 56px);
+}
+
+/* "To be filled in" — a fact the owner hasn't given yet (preview only) */
+.tb-pending {
+  display: inline;
+  border: 1.5px dashed #c2570a;
+  background: #fff7ef;
+  color: #7a350c;
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-size: 0.92em;
+  font-weight: 600;
+  white-space: normal;
+}
+.tb-preview-bar {
+  background: #fff4e8;
+  border-bottom: 1px solid #ffcb9d;
+  color: #7a350c;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 6px 16px;
+}
+
+/* Footer */
+.tb-footer {
+  background: #0f1d47;
+  color: #d7def0;
+  padding: 56px 0 28px;
+  margin-top: 0;
+}
+.tb-footer a {
+  color: #fff;
+  text-decoration: none;
+}
+.tb-footer a:hover {
+  text-decoration: underline;
+}
+.tb-footer .tb-pending {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffd7b0;
+  border-color: #ffae66;
+}
+
+/* Account pages */
+.tb-narrow {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+/* Admin dashboard (phone-first) */
+.tb-admin {
+  background: #f5f7fb;
+}
+.tb-admin__bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #fff;
+  border-bottom: 1px solid var(--tb-line);
+  padding: 10px 16px;
+}
+.tb-admin__brand {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--tb-navy-deep);
+  white-space: nowrap;
+}
+.tb-admin__brand span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tb-teal);
+  margin-left: 4px;
+}
+.tb-admin__nav {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--tb-ink);
+  text-decoration: none;
+}
+.tb-admin__nav.active {
+  background: #eef3ff;
+  color: var(--tb-navy);
+}
+.tb-admin__account {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.tb-admin__page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+}
+.tb-admin__row {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+.tb-admin__row:hover,
+.tb-admin__row:focus-visible {
+  border-color: var(--tb-navy);
+}
+.tb-admin__setting + .tb-admin__setting {
+  border-top: 1px solid var(--tb-line);
+}
+.tb-admin__key,
+.tb-admin__link {
+  overflow-wrap: anywhere;
+  letter-spacing: 0.04em;
+}
+.tb-admin__qr {
+  display: block;
+  background: #fff;
+  border-radius: 6px;
+  padding: 8px;
+}
+.tb-admin__day {
+  letter-spacing: 0.06em;
+}

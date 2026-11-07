@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SPECTRA · responsive overflow check</title>
+<style>body{font:13px/1.4 ui-monospace,monospace;background:#111;color:#ddd;padding:12px}iframe{position:absolute;left:-99999px;top:0;border:0}</style>
+</head><body>
+<pre id="out">running…</pre>
+<script>
+// Loads each page in same-origin frames at real device widths and reports
+// horizontal overflow: page scroll width, and the top-most elements that
+// stick out past the right edge without being clipped by an ancestor.
+const WIDTHS = [320, 360, 375, 390, 412, 430, 768, 820, 1024, 1280, 1366, 1440, 1536, 1920, 2560];
+const DEFAULT_ROUTES = ['/', '/shop', '/product/the-prophecy-i', '/product/edition-ii-acid-wash', '/checkout', '/account', '/lookbook', '/_gallery.html'];
+const ROUTES = new URLSearchParams(location.search).get('routes')?.split(',') ?? DEFAULT_ROUTES;
+const out = document.getElementById('out');
+const lines = [];
+
+function clipped(el, vw, win) {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const ox = win.getComputedStyle(p).overflowX;
+    if (ox !== 'visible' && p.getBoundingClientRect().right <= vw + 1) return true;
+  }
+  return false;
+}
+
+function describe(el) {
+  const cls = (el.className && typeof el.className === 'string') ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+  const txt = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+  return `<${el.tagName.toLowerCase()}${cls}> "${txt}"`;
+}
+
+function measure(frame, width, route) {
+  const win = frame.contentWindow, doc = frame.contentDocument;
+  const vw = doc.documentElement.clientWidth;
+  const sw = doc.documentElement.scrollWidth;
+  const offenders = [];
+  if (sw > vw + 1) {
+    for (const el of doc.body.querySelectorAll('*')) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.right <= vw + 1) continue;
+      if (clipped(el, vw, win)) continue;
+      if (offenders.some(o => o.el.contains(el))) continue;
+      offenders.push({ el, right: Math.round(r.right) });
+    }
+  }
+  const status = sw > vw + 1 ? `OVERFLOW +${sw - vw}px` : 'ok';
+  lines.push(`${String(width).padStart(4)}px  ${route.padEnd(30)} ${status}`);
+  offenders.slice(0, 4).forEach(o => lines.push(`        ↳ right=${o.right} ${describe(o.el)}`));
+}
+
+function load(width, route) {
+  return new Promise(resolve => {
+    const f = document.createElement('iframe');
+    f.width = width; f.height = 900;
+    f.src = route + (route.includes('?') ? '&' : '?') + 'intro=0';
+    f.onload = () => setTimeout(() => { try { measure(f, width, route); } catch (e) { lines.push(`${width} ${route} ERROR ${e}`); } f.remove(); resolve(); }, 1500);
+    document.body.appendChild(f);
+  });
+}
+
+(async () => {
+  for (const route of ROUTES) {
+    await Promise.all(WIDTHS.map(w => load(w, route)));
+  }
+  out.textContent = 'DONE\n' + lines.join('\n');
+  document.title = 'DONE';
+})();
+</script>
+</body></html>

@@ -125,7 +125,7 @@ impl Config {
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
         let frontend_origins: Vec<String> = env::var("FRONTEND_ORIGINS")
-            .unwrap_or_else(|_| "http://localhost:5173".to_string())
+            .unwrap_or_else(|_| "http://localhost:5175".to_string())
             .split(',')
             .map(|origin| origin.trim().trim_end_matches('/'))
             .filter(|origin| !origin.is_empty())
@@ -133,7 +133,7 @@ impl Config {
             .collect();
 
         let site_url = env::var("SITE_URL")
-            .unwrap_or_else(|_| "http://localhost:5173".to_string())
+            .unwrap_or_else(|_| "http://localhost:5175".to_string())
             .trim()
             .trim_end_matches('/')
             .to_string();
