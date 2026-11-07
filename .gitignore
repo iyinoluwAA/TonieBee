@@ -37,3 +37,5 @@ Thumbs.db
 __pycache__/
 .eslintcache
 .stylelintcache
+!/Dockerfile
+!/.dockerignore

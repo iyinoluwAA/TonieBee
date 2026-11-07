@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use tower_http::{
     compression::CompressionLayer,
     cors::{AllowOrigin, CorsLayer},
+    services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
 
@@ -51,21 +52,35 @@ pub fn router(state: AppState) -> Router {
         .fallback(|| async { AppError::NotFound("Not found.".into()) })
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES));
 
-    Router::new()
-        .nest("/api", api)
-        .fallback(|| async { AppError::NotFound("Not found.".into()) })
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            require_site_origin,
-        ))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            security_headers,
-        ))
-        .layer(cors)
-        .layer(CompressionLayer::new())
-        .layer(TraceLayer::new_for_http())
-        .with_state(state)
+    let app = Router::new().nest("/api", api);
+    // Live: the built website is served from the same address as the API.
+    let app = match &state.config.site_dir {
+        Some(dir) => {
+            let dir = std::path::Path::new(dir);
+            app
+                // Hashed files: a missing one is a real 404, never the page.
+                .nest_service("/assets", ServeDir::new(dir.join("assets")))
+                // Everything else: the file if it exists, otherwise the app's page
+                // (it shows its own "page not found").
+                .fallback_service(
+                    ServeDir::new(dir).fallback(ServeFile::new(dir.join("index.html"))),
+                )
+        }
+        None => app.fallback(|| async { AppError::NotFound("Not found.".into()) }),
+    };
+
+    app.layer(middleware::from_fn_with_state(
+        state.clone(),
+        require_site_origin,
+    ))
+    .layer(middleware::from_fn_with_state(
+        state.clone(),
+        security_headers,
+    ))
+    .layer(cors)
+    .layer(CompressionLayer::new())
+    .layer(TraceLayer::new_for_http())
+    .with_state(state)
 }
 
 /// Liveness + database check (used by the host's health probe).

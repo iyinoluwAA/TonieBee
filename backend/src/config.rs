@@ -33,6 +33,11 @@ pub struct Config {
     /// Provinces whose residents can send a consultation request — only where the
     /// owner is licensed. All 13 until that's known (`SERVICE_PROVINCES=ON,QC`).
     pub service_provinces: Vec<String>,
+    /// The built website (frontend/dist) to serve next to the API, so both share one
+    /// address. Unset in development (Vite serves the site there).
+    pub site_dir: Option<String>,
+    /// A preview, not the live site: every page says "noindex" to search engines.
+    pub site_preview: bool,
 }
 
 /// Secret bytes that never appear in logs or `{:?}` output.
@@ -151,6 +156,17 @@ impl Config {
             .unwrap_or(0);
 
         let service_provinces = parse_provinces(optional_env("SERVICE_PROVINCES").as_deref());
+        let site_dir = optional_env("SITE_DIR");
+        if let Some(dir) = &site_dir {
+            assert!(
+                std::path::Path::new(dir).join("index.html").is_file(),
+                "SITE_DIR={dir} has no index.html — build the website first (frontend: npm run build)"
+            );
+        }
+        let site_preview = matches!(
+            optional_env("SITE_PREVIEW").as_deref(),
+            Some("1" | "true" | "yes")
+        );
 
         let config = Self {
             app_env,
@@ -166,6 +182,8 @@ impl Config {
             mail_provider,
             trusted_proxy_hops,
             service_provinces,
+            site_dir,
+            site_preview,
         };
         assert!(
             config.auth_secret.expose() != config.data_key.expose(),
@@ -204,6 +222,8 @@ impl Config {
             smtp: SmtpConfig::default(),
             trusted_proxy_hops: 0,
             service_provinces: ALL_PROVINCES.iter().map(|p| p.to_string()).collect(),
+            site_dir: None,
+            site_preview: false,
         }
     }
 
