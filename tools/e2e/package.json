@@ -1,0 +1,9 @@
+{
+  "name": "toniebee-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Click-through checks of the real site + API (see tools/README.md).",
+  "dependencies": {
+    "playwright-core": "^1.56.0"
+  }
+}

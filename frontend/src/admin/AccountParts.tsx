@@ -159,6 +159,7 @@ export function CodeBoxes({
         }}
         disabled={disabled}
         aria-label={label}
+          ariaLabel={label}
       />
     </Group>
   )

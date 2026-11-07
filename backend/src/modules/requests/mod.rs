@@ -34,9 +34,10 @@ use crate::{
     client_ip::{rate_key, ClientIp},
     error::{AppError, AppResult},
     modules::accounts::{
-        emails, is_hidden_char, limit, normalize_email,
+        emails, is_hidden_char, normalize_email,
         session::{CurrentUser, MaybeUser},
     },
+    rate_limit::retry_after_text,
     state::AppState,
 };
 
@@ -250,7 +251,15 @@ async fn create(
     MaybeUser(user): MaybeUser,
     Json(body): Json<NewRequest>,
 ) -> AppResult<Json<Value>> {
-    limit(&state, &format!("request:ip:{}", rate_key(&ip)), 5, HOUR)?;
+    state
+        .rate_limiter
+        .check(&format!("request:ip:{}", rate_key(&ip)), 5, HOUR)
+        .map_err(|hit| {
+            AppError::TooManyRequests(format!(
+                "You’ve sent several requests from here already. Please try again in {}, or email us.",
+                retry_after_text(hit.retry_after_seconds)
+            ))
+        })?;
 
     // A bot filled the hidden field: answer as if it worked, keep nothing.
     if body

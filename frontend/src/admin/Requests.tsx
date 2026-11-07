@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Alert, Badge, Box, Button, Group, Loader, Paper, SegmentedControl, Stack, Text, Title } from '@mantine/core'
+import { Alert, Badge, Box, Button, Group, Loader, Paper, Stack, Text, Title } from '@mantine/core'
 import { IconMessage } from '@tabler/icons-react'
 import {
   adminApi,
@@ -70,14 +70,21 @@ export function Requests() {
           People who asked for a consultation on the website.
         </Text>
       </Stack>
-      <SegmentedControl
-        fullWidth
-        maw={520}
-        aria-label="Which requests"
-        data={FILTERS.map((f) => ({ value: f.value, label: label(f) }))}
-        value={filter}
-        onChange={(value) => setParams(value === 'open' ? {} : { show: value }, { replace: true })}
-      />
+      {/* Buttons that wrap, so every filter fits a phone screen. */}
+      <Group gap={6} role="group" aria-label="Which requests">
+        {FILTERS.map((f) => (
+          <Button
+            key={f.value}
+            size="compact-sm"
+            radius="xl"
+            variant={filter === f.value ? 'filled' : 'default'}
+            aria-pressed={filter === f.value}
+            onClick={() => setParams(f.value === 'open' ? {} : { show: f.value }, { replace: true })}
+          >
+            {label(f)}
+          </Button>
+        ))}
+      </Group>
       {error && (
         <Alert color="red" variant="light">
           {error}

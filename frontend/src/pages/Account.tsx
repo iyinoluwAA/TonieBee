@@ -185,6 +185,7 @@ function SignInForm({ notice }: { notice: string | null }) {
           }}
           disabled={busy}
           aria-label="6-digit sign-in code"
+          ariaLabel="6-digit sign-in code"
         />
       </Group>
       {error && (

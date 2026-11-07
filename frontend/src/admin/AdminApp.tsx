@@ -65,14 +65,15 @@ export default function AdminApp() {
           </Center>
         ) : (
           <Routes>
-            <Route path="/admin/sign-in" element={<SignIn />} />
+            {/* Paths are relative to /admin (this app is mounted at /admin/*). */}
+            <Route path="sign-in" element={<SignIn />} />
             {/* An invite link's page: open to whoever holds the link (signed out). */}
-            <Route path="/admin/welcome" element={<Welcome />} />
-            <Route path="/admin" element={<Guarded><Overview /></Guarded>} />
-            <Route path="/admin/requests" element={<Guarded><Requests /></Guarded>} />
-            <Route path="/admin/requests/:id" element={<Guarded><RequestPage /></Guarded>} />
-            <Route path="/admin/activity" element={<Guarded><Activity /></Guarded>} />
-            <Route path="/admin/account" element={<Guarded><Account /></Guarded>} />
+            <Route path="welcome" element={<Welcome />} />
+            <Route index element={<Guarded><Overview /></Guarded>} />
+            <Route path="requests" element={<Guarded><Requests /></Guarded>} />
+            <Route path="requests/:id" element={<Guarded><RequestPage /></Guarded>} />
+            <Route path="activity" element={<Guarded><Activity /></Guarded>} />
+            <Route path="account" element={<Guarded><Account /></Guarded>} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
         )}

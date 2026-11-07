@@ -166,6 +166,7 @@ export function SignIn() {
                   }}
                   disabled={busy}
                   aria-label="6-digit code from your authenticator app"
+          ariaLabel="6-digit code from your authenticator app"
                 />
               </Group>
               <Anchor component="button" type="button" size="sm" ta="center" onClick={() => setBackup(true)}>
