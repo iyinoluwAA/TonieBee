@@ -76,7 +76,11 @@ pub async fn security_headers(State(state): State<AppState>, req: Request, next:
             "no-cache"
         };
         headers.insert("Cache-Control", HeaderValue::from_static(cache));
-        if state.config.site_preview || path.starts_with("/admin") || path.starts_with("/account") {
+        if state.config.site_preview
+            || ["/admin", "/account", "/sign-in"]
+                .iter()
+                .any(|p| path.starts_with(p))
+        {
             headers.insert(
                 "X-Robots-Tag",
                 HeaderValue::from_static("noindex, nofollow"),
