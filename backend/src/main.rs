@@ -1,95 +1,74 @@
-mod config;
-mod db;
-mod dtos;
-mod error;
-mod handler;
-mod mail;
-mod middleware;
-mod models;
-mod routes;
-mod utils;
+use std::net::SocketAddr;
 
-// Ensure oauth module is included
-pub use utils::oauth;
+use tracing_subscriber::EnvFilter;
 
-
-use std::{sync::Arc, time::Instant};
-
-use axum::http::{
-    header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
-    HeaderValue, Method,
+use toniebee_api::{
+    cleanup, cli, config::Config, db, mail::Mailer, modules::accounts::password, router,
+    state::AppState,
 };
-use config::Config;
-use db::DBClient;
-use dotenv::dotenv;
-use routes::create_router;
-use sqlx::postgres::PgPoolOptions;
-use tower_http::cors::{AllowOrigin, CorsLayer};
-use tracing_subscriber::filter::LevelFilter;
-
-#[derive(Debug, Clone)]
-pub struct AppState {
-    pub env: Config,
-    pub db_client: DBClient,
-    pub start_time: Instant,
-}
 
 #[tokio::main]
 async fn main() {
+    // `toniebee-api <command>` runs a command-line task instead of the server.
+    let mut args = std::env::args().skip(1);
+    if let Some(command) = args.next() {
+        let rest: Vec<String> = args.collect();
+        cli::run(&command, &rest).await;
+        return;
+    }
+
+    let config = Config::from_env();
+
     tracing_subscriber::fmt()
-        .with_max_level(LevelFilter::DEBUG)
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("toniebee_api=info,tower_http=info")),
+        )
         .init();
 
-    dotenv().ok();
+    let db = db::connect(&config).await;
+    tokio::task::spawn_blocking(password::warm_up);
+    cleanup::spawn(db.clone());
+    let mailer = Mailer::from_config(&config);
+    if matches!(mailer, Mailer::Disabled) {
+        tracing::warn!("no email provider configured: sign-in emails are switched off");
+    }
 
-    let config = Config::init();
+    let addr = config.socket_addr();
+    tracing::info!(%addr, env = %config.app_env, "TonieBee API listening");
 
-    // Configure database pool with security settings
-    // Note: SSL is configured in DATABASE_URL itself (e.g., ?sslmode=require)
-    // For production, ensure DATABASE_URL includes SSL parameters like:
-    // postgresql://user:pass@host/db?sslmode=require
-    let pool = match PgPoolOptions::new()
-        .max_connections(10)
-        .min_connections(2)
-        .connect(&config.database_url)
+    let state = AppState::new(config, db, mailer);
+    let app = router(state);
+    let listener = tokio::net::TcpListener::bind(addr)
         .await
-    {
-        Ok(pool) => {
-            println!("✅Connection to the database is successful!");
-            pool
-        }
-        Err(err) => {
-            println!("🔥 Failed to connect to the database: {:?}", err);
-            std::process::exit(1);
+        .expect("could not bind address");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .expect("server error");
+}
+
+/// Ctrl+C on the laptop, SIGTERM from the host (Render sends it before a redeploy):
+/// finish the requests in flight, then stop.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c().await.ok();
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        if let Ok(mut signal) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {
+            signal.recv().await;
         }
     };
-
-    // Allow both common frontend dev ports (Vite default is 5173, but some setups use 3000)
-    let cors = CorsLayer::new()
-        .allow_origin(AllowOrigin::predicate(|origin: &HeaderValue, _request_head: &_| {
-            let origin_str = origin.to_str().unwrap_or("");
-            origin_str == "http://localhost:5173" || origin_str == "http://localhost:3000"
-        }))
-        .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
-        .allow_credentials(true)
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE]);
-
-    let db_client = DBClient::new(pool);
-    let app_state = AppState {
-        env: config.clone(),
-        db_client,
-        start_time: Instant::now(),
-    };
-
-    let app = create_router(Arc::new(app_state.clone())).layer(cors.clone());
-
-    println!(
-        "🚀 Server is running on http://localhost:{}", config.port
-    );
-
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", &config.port))
-        .await
-        .unwrap();
-
-    axum::serve(listener, app).await.unwrap();
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }

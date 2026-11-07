@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS consultation_requests;
+DROP TABLE IF EXISTS alert_marks;
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS admin_invites;
+DROP TABLE IF EXISTS admin_backup_codes;
+DROP TABLE IF EXISTS admin_challenges;
+DROP TABLE IF EXISTS sign_in_codes;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS known_devices;
+DROP TABLE IF EXISTS users;
+DROP FUNCTION IF EXISTS set_updated_at();

@@ -1,36 +1,45 @@
 [package]
-name = "TB-backend"
-version = "0.1.0"
+name = "toniebee-api"
+version = "0.2.0"
 edition = "2021"
+description = "TonieBee website API: accounts (email sign-in, admin password + authenticator) and consultation requests"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "toniebee-api"
+path = "src/main.rs"
 
 [dependencies]
-argon2 = "0.5.1"
-async-trait = "0.1.72"
-chrono = { version = "0.4.26", features = ["serde"] }
-dotenv = "0.15.0"
-jsonwebtoken = "9.2.0"
-serde = { version = "1.0.183", features = ["derive"] }
-serde_json = "1.0.104"
-sqlx = { version = "0.8.1", features = ["runtime-async-std-native-tls", "postgres", "chrono", "uuid", "rust_decimal"] }
-uuid = { version = "1.4.1", features = ["serde", "v4"] }
-validator = { version = "0.16.1", features = ["derive"] }
-axum = { version = "0.7.5", features = ["macros"] }
-axum-extra = { version = "0.9.3", features = ["cookie"] }
-tokio = { version = "1.39.3", features = ["full"] }
-tower = "0.5.0"
-time = "0.3.20"
-tower-http = { version = "0.5.2", features = ["cors", "trace"] }
-tracing-subscriber = { version = "0.3.18" }
-lettre = "0.11.7"
-rand = "0.8"
+aes-gcm = "0.10"
+argon2 = "0.5"
+axum = { version = "0.7", features = ["macros"] }
+axum-extra = { version = "0.9", features = ["cookie"] }
+base32 = "0.5"
+chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
 hex = "0.4"
-totp-lite = "2.0.1"
-qrcode = "0.14"
-base32 = "0.5.0"
-urlencoding = "2.1"
+hmac = "0.12"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls-tls", "hostname"] }
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+rand = "0.8"
+rpassword = "7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha1 = "0.10"
 sha2 = "0.10"
-oauth2 = { version = "4.4", features = ["reqwest"] }
-reqwest = { version = "0.11", features = ["json"] }
-rust_decimal = { version = "1.35", features = ["serde-with-str"] }
-regex = "1.10"
-lazy_static = "1.4"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono", "migrate", "uuid"] }
+subtle = "2"
+thiserror = "1"
+time = "0.3"
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["compression-br", "compression-gzip", "cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+http-body-util = "0.1"

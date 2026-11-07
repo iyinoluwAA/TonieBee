@@ -1,0 +1,5 @@
+# The Rust version every build uses — the laptop, CI and Render — so the live
+# server is built exactly as it was tested. Raise it on purpose, in its own branch.
+[toolchain]
+channel = "1.90.0"
+components = ["rustfmt", "clippy"]

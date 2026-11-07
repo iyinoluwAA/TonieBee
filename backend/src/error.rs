@@ -1,163 +1,85 @@
+//! API errors → JSON `{ "status": "error", "message": "..." }`.
+//! Database details never reach clients (they're logged on the server instead).
+
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
-use serde::{Deserialize, Serialize};
-use std::fmt;
+use serde::Serialize;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ErrorResponse {
-    pub status: String,
+#[derive(Debug, Serialize)]
+pub struct ErrorBody {
+    pub status: &'static str,
     pub message: String,
 }
 
-impl fmt::Display for ErrorResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", serde_json::to_string(&self).unwrap())
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum AppError {
+    #[error("{0}")]
+    BadRequest(String),
+
+    #[error("{0}")]
+    Unauthorized(String),
+
+    #[error("{0}")]
+    Forbidden(String),
+
+    #[error("{0}")]
+    NotFound(String),
+
+    #[error("{0}")]
+    Conflict(String),
+
+    #[error("{0}")]
+    TooManyRequests(String),
+
+    #[error("{0}")]
+    ServiceUnavailable(String),
+
+    #[error("internal server error")]
+    Internal,
+
+    #[error(transparent)]
+    Sqlx(#[from] sqlx::Error),
 }
 
-#[derive(Debug, PartialEq)]
-pub enum ErrorMessage {
-    EmptyPassword,
-    ExceededMaxPasswordLength(usize),
-    WeakPassword(String),
-    InvalidHashFormat,
-    HashingError,
-    InvalidToken,
-    #[allow(dead_code)]
-    WrongCredentials, // Kept for potential future use
-    EmailExist,
-    UserNoLongerExist,
-    TokenNotProvided,
-    PermissionDenied,
-    UserNotAuthenticated,
-}
-
-
-impl fmt::Display for ErrorMessage {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_str())
-    }
-}
-
-
-impl ErrorMessage {
-    fn to_str(&self) -> String {
+impl AppError {
+    pub fn status_code(&self) -> StatusCode {
         match self {
-            ErrorMessage::WrongCredentials => "Invalid email or password".to_string(),
-            ErrorMessage::EmailExist => "A user with this email already exists".to_string(),
-            ErrorMessage::UserNoLongerExist => {
-                "User belonging to this token no longer exists".to_string()
+            AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+            AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::NotFound(_) => StatusCode::NOT_FOUND,
+            AppError::Conflict(_) => StatusCode::CONFLICT,
+            AppError::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
+            AppError::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            AppError::Internal | AppError::Sqlx(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    pub fn public_message(&self) -> String {
+        match self {
+            AppError::Sqlx(_) | AppError::Internal => {
+                "Something went wrong on our side. Please try again in a moment.".to_string()
             }
-            ErrorMessage::EmptyPassword => "Password cannot be empty".to_string(),
-            ErrorMessage::HashingError => "Error while hashing password".to_string(),
-            ErrorMessage::InvalidHashFormat => "Invalid password hash format".to_string(),
-            ErrorMessage::ExceededMaxPasswordLength(max_length) => {
-                format!("Password must not be more than {} characters", max_length)
-            }
-            ErrorMessage::WeakPassword(msg) => msg.clone(),
-            ErrorMessage::InvalidToken => "Authentication token is invalid or expired".to_string(),
-            ErrorMessage::TokenNotProvided => {
-                "You are not logged in, please provide a token".to_string()
-            }
-            ErrorMessage::PermissionDenied => {
-                "You are not allowed to perform this action".to_string()
-            }
-            ErrorMessage::UserNotAuthenticated => {
-                "Authentication required. Please log in.".to_string()
-            }
+            _ => self.to_string(),
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct HttpError {
-    pub message: String,
-    pub status: StatusCode,
-}
-impl HttpError {
-    pub fn new(message: impl Into<String>, status: StatusCode) -> Self {
-        HttpError {
-            message: message.into(),
-            status,
-        }
-    }
-
-    pub fn server_error(message: impl Into<String>) -> Self {
-        HttpError {
-            message: message.into(),
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-
-    pub fn bad_request(message: impl Into<String>) -> Self {
-        HttpError {
-            message: message.into(),
-            status: StatusCode::BAD_REQUEST,
-        }
-    }
-
-    pub fn unique_constraint_violation(message: impl Into<String>) -> Self {
-        HttpError {
-            message: message.into(),
-            status: StatusCode::CONFLICT,
-        }
-    }
-
-    pub fn unauthorized(message: impl Into<String>) -> Self {
-        HttpError {
-            message: message.into(),
-            status: StatusCode::UNAUTHORIZED,
-        }
-    }
-
-    pub fn forbidden(message: impl Into<String>) -> Self {
-        HttpError {
-            message: message.into(),
-            status: StatusCode::FORBIDDEN,
-        }
-    }
-
-    pub fn not_found(message: impl Into<String>) -> Self {
-        HttpError {
-            message: message.into(),
-            status: StatusCode::NOT_FOUND,
-        }
-    }
-
-    pub fn too_many_requests(message: impl Into<String>) -> Self {
-        HttpError {
-            message: message.into(),
-            status: StatusCode::TOO_MANY_REQUESTS,
-        }
-    }
-
-    pub fn into_http_response(self) -> Response {
-        let json_response = Json(ErrorResponse {
-            status: "fail".to_string(),
-            message: self.message.clone(),
-        });
-
-        (self.status, json_response).into_response()
-    }
-}
-
-impl fmt::Display for HttpError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "HttpError: message: {}, status: {}",
-            self.message, self.status
-        )
-    }
-}
-
-impl std::error::Error for HttpError {}
-
-impl IntoResponse for HttpError {
+impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        self.into_http_response()
+        if let AppError::Sqlx(err) = &self {
+            tracing::error!(error = %err, "database error");
+        }
+        let status = self.status_code();
+        let body = Json(ErrorBody {
+            status: "error",
+            message: self.public_message(),
+        });
+        (status, body).into_response()
     }
 }
+
+pub type AppResult<T> = Result<T, AppError>;
